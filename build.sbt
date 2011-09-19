@@ -1,8 +1,8 @@
-organization := "com.example"
+organization := "com.sdps"
 
-name := "My Scalatra Web App"
+name := "scalatra-data-presentation-server"
 
-version := "0.1.0-SNAPSHOT"
+version := "0.0.1-SNAPSHOT"
 
 scalaVersion := "2.9.2"
 
@@ -16,5 +16,6 @@ libraryDependencies ++= Seq(
   "org.scalatra" % "scalatra-specs2" % "2.1.1" % "test",
   "ch.qos.logback" % "logback-classic" % "1.0.6" % "runtime",
   "org.eclipse.jetty" % "jetty-webapp" % "8.1.7.v20120910" % "container",
-  "org.eclipse.jetty.orbit" % "javax.servlet" % "3.0.0.v201112011016" % "container;provided;test" artifacts (Artifact("javax.servlet", "jar", "jar"))
+  "org.eclipse.jetty.orbit" % "javax.servlet" % "3.0.0.v201112011016" % "container;provided;test" artifacts (Artifact("javax.servlet", "jar", "jar")),
+  "net.liftweb" %% "lift-json" % "2.5-SNAPSHOT"
 )
