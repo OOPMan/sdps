@@ -1,6 +1,7 @@
 package com.sdps.datasources
 
-import net.liftweb.json.JsonAST.{JObject, JValue, JString}
+import net.liftweb.json._
+import java.net.URI
 
 /**
  * Created by IntelliJ IDEA.
@@ -10,7 +11,7 @@ import net.liftweb.json.JsonAST.{JObject, JValue, JString}
  * To change this template use File | Settings | File Templates.
  */
 
-abstract class DataSource(val uri: String) {
+abstract class DataSource(val uri: URI) {
 
     def getItemsById(ids: Seq[JValue] = Nil, attributes: Seq[JString] = Nil): Seq[JObject]
 
