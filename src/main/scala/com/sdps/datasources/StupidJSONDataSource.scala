@@ -4,6 +4,7 @@ import scala.io.Source.fromURI
 import net.liftweb.json._
 import java.net.URI
 import java.io.{File, FileWriter}
+import java.util.UUID
 
 /**
  * Created by IntelliJ IDEA.
@@ -38,11 +39,14 @@ class StupidJSONDataSource(override val uri: URI) extends DataSource(uri) {
     //TODO: Implement
     def getItemsByFilter(filters: Seq[(JString, JString, JValue)], attributes: Seq[JString]) = null
 
-    //TODO: Implement
-    def addItems(items: Seq[JObject]) = null
+    def addItems(items: Seq[JObject]) = {
+        val newItems = new JObject(Nil ++ items map { new JField(UUID.randomUUID.toString, _) })
+        writeData(readData merge newItems match { case o: JObject => o })
+        newItems.obj.map { (f: JField) => new JString(f.name) }
+    }
 
     //TODO: Implement
-    def updateItems(items: Seq[JObject]) = null
+    def updateItems(items: Seq[(JValue, JObject)]) = null
 
     //TODO: Implement
     def deleteItemsById(ids: Seq[JValue]) = null
