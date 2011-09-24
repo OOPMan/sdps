@@ -19,7 +19,7 @@ abstract class DataSource(val uri: URI) {
 
     def addItems(items: Seq[JObject]): Seq[JValue]
 
-    def updateItems(items: Seq[JObject])
+    def updateItems(items: Seq[(JValue, JObject)])
 
     def deleteItemsById(ids: Seq[JValue] = Nil)
 
