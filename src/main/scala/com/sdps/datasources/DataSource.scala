@@ -13,7 +13,7 @@ import java.net.URI
 
 abstract class DataSource(val uri: URI) {
 
-    def getItemsById(ids: Seq[JValue] = Nil, attributes: Seq[JString] = Nil): Seq[JObject]
+    def getItemsById(ids: Seq[JValue] = Nil, attributes: Seq[JString] = Nil): Seq[(JValue, JValue)]
 
     /**
      * Filters following a fairly simple format. Each Filter consists of a tuple containing:
@@ -41,11 +41,11 @@ abstract class DataSource(val uri: URI) {
      *
      * TODO: Detail the manner in which the comparison operators interact with various values
      */
-    def getItemsByFilter(filters: Seq[(JArray, JString, JValue)] = Nil, attributes: Seq[JString] = Nil): Seq[JObject]
+    def getItemsByFilter(filters: Seq[(JArray, JString, JValue)] = Nil, attributes: Seq[JString] = Nil): Seq[(JValue, JValue)]
 
-    def addItems(items: Seq[JObject]): Seq[JValue]
+    def addItems(items: Seq[JValue]): Seq[JValue]
 
-    def updateItems(items: Seq[(JValue, JObject)])
+    def updateItems(items: Seq[(JValue, JValue)])
 
     def deleteItemsById(ids: Seq[JValue] = Nil)
 
