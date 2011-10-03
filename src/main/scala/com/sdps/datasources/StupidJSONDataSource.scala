@@ -105,11 +105,14 @@ class StupidJSONObjectDataSource(override val uri: URI) extends StupidJSONDataSo
 
     protected def readData = super.readData match { case o: JObject => o }
 
+    protected def filterObject(value: JObject, attributes: Seq[JString]) =
+        if(attributes.length == 0) value
+        else new JObject(value.obj filter { case JField(fieldname, _) => attributes contains fieldname } )
+
     def getItemsById(ids: Seq[JValue] = Nil, attributes: Seq[JString] = Nil) = for {
         JField(name, value: JObject) <- readData.obj
         if (ids.length == 0) || (ids contains name)
-        final_value = if(attributes.length == 0) value else new JObject(value.obj filter { case JField(fieldname, _) => attributes contains fieldname } )
-    } yield (new JString(name), final_value)
+    } yield (new JString(name), filterObject(value, attributes))
 
     def filterItems(items: Seq[JField], filters: Seq[(JArray, JString, JValue)]): Seq[JField] = filters.headOption match {
         case (JArray(properties), JString(comparator), targetValue) => filterItems(items filter { (item: JField) => filterItem(item.value, properties, comparator, targetValue) }, filters.tail)
@@ -118,8 +121,7 @@ class StupidJSONObjectDataSource(override val uri: URI) extends StupidJSONDataSo
 
     def getItemsByFilter(filters: Seq[(JArray, JString, JValue)] = Nil, attributes: Seq[JString] = Nil) = for {
         JField(name, value: JObject) <- filterItems(readData.obj, filters)
-        final_value = if(attributes.length == 0) value else new JObject(value.obj filter { case JField(fieldname, _) => attributes contains fieldname } )
-    } yield (new JString(name), final_value)
+    } yield (new JString(name), filterObject(value, attributes))
 
     def addItems(items: Seq[JValue]) = {
         val itemIds = for(item <- items) yield new JString(UUID.randomUUID.toString)
