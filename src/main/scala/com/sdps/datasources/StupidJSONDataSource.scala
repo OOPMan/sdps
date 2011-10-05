@@ -93,6 +93,29 @@ abstract class StupidJSONDataSource(override val uri: URI) extends DataSource(ur
         }
         if(comparator startsWith "!") !comparisonResult else comparisonResult
     }
+
+    def filterItemContent(item: JValue, contentFilters: Seq[JArray]) = {
+        if(contentFilters.isEmpty) item
+        else item match {
+            case objekt: JObject => new JObject(filterObjectContent(objekt, contentFilters).toList)
+            case array: JArray  => new JArray(filterArrayContent(array, contentFilters).toList)
+            case _ => item
+        }
+    }
+
+    def convertPropertiesToString(properties: Seq[JValue]) = properties map {
+        case JString(s) => s
+        case JInt(i) => i.toString
+    } mkString "."
+
+    def filterObjectContent(objekt: JObject, contentFilters: Seq[JArray]) = for {
+        JArray(properties) <- contentFilters
+    } yield new JField(convertPropertiesToString(properties), resolveProperty(objekt, properties))
+
+    def filterArrayContent(array: JArray, contentFilters: Seq[JArray]) = for {
+        JArray(properties) <- contentFilters
+    } yield resolveProperty(array, properties)
+
 }
 
 /**
@@ -105,23 +128,19 @@ class StupidJSONObjectDataSource(override val uri: URI) extends StupidJSONDataSo
 
     protected def readData = super.readData match { case o: JObject => o }
 
-    protected def filterObject(value: JObject, attributes: Seq[JString]) =
-        if(attributes.length == 0) value
-        else new JObject(value.obj filter { case JField(fieldname, _) => attributes contains fieldname } )
-
-    def getItemsById(ids: Seq[JValue] = Nil, attributes: Seq[JString] = Nil) = for {
+    def getItemsById(itemIds: Seq[JValue] = Nil, contentFilters: Seq[JArray] = Nil) = for {
         JField(name, value: JObject) <- readData.obj
-        if (ids.length == 0) || (ids contains name)
-    } yield (new JString(name), filterObject(value, attributes))
+        if itemIds.isEmpty || (itemIds contains name)
+    } yield (new JString(name), filterItemContent(value, contentFilters))
 
     def filterItems(items: Seq[JField], filters: Seq[(JArray, JString, JValue)]): Seq[JField] = filters.headOption match {
         case (JArray(properties), JString(comparator), targetValue) => filterItems(items filter { (item: JField) => filterItem(item.value, properties, comparator, targetValue) }, filters.tail)
         case _ => items
     }
 
-    def getItemsByFilter(filters: Seq[(JArray, JString, JValue)] = Nil, attributes: Seq[JString] = Nil) = for {
-        JField(name, value: JObject) <- filterItems(readData.obj, filters)
-    } yield (new JString(name), filterObject(value, attributes))
+    def getItemsByFilter(itemFilters: Seq[(JArray, JString, JValue)] = Nil, contentFilters: Seq[JArray] = Nil) = for {
+        JField(name, value: JObject) <- filterItems(readData.obj, itemFilters)
+    } yield (new JString(name), filterItemContent(value, contentFilters))
 
     def addItems(items: Seq[JValue]) = {
         val itemIds = for(item <- items) yield new JString(UUID.randomUUID.toString)
@@ -141,8 +160,10 @@ class StupidJSONArrayDataSource(override val uri: URI) extends StupidJSONDataSou
 
     protected def readData = super.readData match { case a: JArray => a }
 
-    readData.arr.
-
-    //TODO: Implement Abstract methods
+    def getItemsById(ids: Seq[JValue] = Nil, attributes: Seq[JString] = Nil) = for {
+        JArray(JString(name) :: JObject(value) :: Nil) <- readData.arr
+        if (ids.length == 0) || (ids contains name)
+    } yield (new JString(name), filterObject(value, attributes))
+        //TODO: Implement Abstract methods
 }
 
