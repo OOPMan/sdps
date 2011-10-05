@@ -13,7 +13,7 @@ import java.net.URI
 
 abstract class DataSource(val uri: URI) {
 
-    def getItemsById(ids: Seq[JValue] = Nil, contentFilters: Seq[JArray] = Nil): Seq[(JValue, JValue)]
+    def getItemsById(itemIds: Seq[JValue] = Nil, contentFilters: Seq[JArray] = Nil): Seq[(JValue, JValue)]
 
     /**
      * Filters following a fairly simple format. Each Filter consists of a tuple containing:
