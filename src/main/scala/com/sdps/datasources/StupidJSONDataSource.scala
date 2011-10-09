@@ -128,17 +128,20 @@ class StupidJSONObjectDataSource(override val uri: URI) extends StupidJSONDataSo
 
     protected def readData = super.readData match { case o: JObject => o }
 
-    def getItemsById(itemIds: Seq[JValue] = Nil, contentFilters: Seq[JArray] = Nil) = for {
+    //TODO: Implement sort and slice handling
+    def getItemsById(itemIds: Seq[JValue] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[JArray] = Nil, itemRange: (JInt, JInt) = (0,-1)) = for {
         JField(name, value: JObject) <- readData.obj
         if itemIds.isEmpty || (itemIds contains name)
     } yield (new JString(name), filterItemContent(value, contentFilters))
 
-    def filterItems(items: Seq[JField], filters: Seq[(JArray, JString, JValue)]): Seq[JField] = filters.headOption match {
+    //TODO: This is shared with StupidJSONArrayDataSource. Find a way to factor it out into StupidJSONDataSource
+    protected def filterItems(items: Seq[JField], filters: Seq[(JArray, JString, JValue)]): Seq[JField] = filters.headOption match {
         case (JArray(properties), JString(comparator), targetValue) => filterItems(items filter { (item: JField) => filterItem(item.value, properties, comparator, targetValue) }, filters.tail)
         case _ => items
     }
 
-    def getItemsByFilter(itemFilters: Seq[(JArray, JString, JValue)] = Nil, contentFilters: Seq[JArray] = Nil) = for {
+    //TODO: Implement sort and slice handling
+    def getItemsByFilter(itemFilters: Seq[(JArray, JString, JValue)] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[JArray] = Nil, itemRange: (JInt, JInt) = (0,-1)) = for {
         JField(name, value: JObject) <- filterItems(readData.obj, itemFilters)
     } yield (new JString(name), filterItemContent(value, contentFilters))
 
@@ -160,10 +163,18 @@ class StupidJSONArrayDataSource(override val uri: URI) extends StupidJSONDataSou
 
     protected def readData = super.readData match { case a: JArray => a }
 
-    def getItemsById(ids: Seq[JValue] = Nil, attributes: Seq[JString] = Nil) = for {
-        JArray(JString(name) :: JObject(value) :: Nil) <- readData.arr
-        if (ids.length == 0) || (ids contains name)
-    } yield (new JString(name), filterObject(value, attributes))
-        //TODO: Implement Abstract methods
+    def getItemsById(itemIds: Seq[JValue] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[JArray] = Nil, itemRange: (JInt, JInt) = (0,-1)) = for {
+        JArray(List(JString(name), value: JValue)) <- readData.arr
+        if itemIds.isEmpty || (itemIds contains name)
+    } yield (new JString(name), filterItemContent(value, contentFilters))
+
+    protected def filterItems(items: Seq[JValue], filters: Seq[(JArray, JString, JValue)]): Seq[JField] = filters.headOption match {
+        case (JArray(properties), JString(comparator), targetValue) => filterItems(items filter { (item: JField) => filterItem(item.value, properties, comparator, targetValue) }, filters.tail)
+        case _ => items
+    }
+
+    def getItemsByFilter(itemFilters: Seq[(JArray, JString, JValue)] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[JArray] = Nil, itemRange: (JInt, JInt) = (0,-1)) = for {
+        JArray(List(JString(name), value: JValue)) <- filterItems(readData.arr, itemFilters)
+    } yield (new JString(name), filterItemContent(value, contentFilters))
 }
 
