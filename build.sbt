@@ -20,3 +20,6 @@ libraryDependencies ++= Seq(
   "net.liftweb" %% "lift-json" % "2.5-SNAPSHOT",
   "org.scalatest" %% "scalatest" % "1.8" % "test"
 )
+
+resolvers += "Sonatype OSS Snapshots" at "http://oss.sonatype.org/content/repositories/snapshots/"
+
