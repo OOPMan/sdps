@@ -1,11 +1,11 @@
 package com.sdps.datasources
 
-import scala.io.Source.fromURI
+import scala.io.Source.fromFile
 import net.liftweb.json._
-import java.net.URI
-import java.io.{File, FileWriter}
-import java.util.UUID
 import net.liftweb.json.Implicits._
+import net.liftweb.json.JsonParser.ParseException
+import java.io.{FileNotFoundException, File, FileWriter}
+import java.util.{NoSuchElementException, UUID}
 
 /**
  * Created by IntelliJ IDEA.
@@ -17,17 +17,25 @@ import net.liftweb.json.Implicits._
  * A Stupid JSON DataSource. Loads JSON data from a file. Very stupid :-)
  *
  */
-abstract class StupidJSONDataSource(override val uri: URI) extends DataSource(uri) {
+abstract class StupidJSONDataSource(override val connectionString: String) extends DataSource(connectionString) {
 
-    protected def readData = parse(fromURI(uri).mkString)
-
-    protected def writeData(data: JValue) {
-        val writer = new FileWriter(new File(uri))
-        try { writer.write(compact(render(data))) }
-        finally { writer.close() }
+    protected def readData = try { parse(fromFile(connectionString).mkString) } catch {
+        case e: FileNotFoundException => JNothing
+        case e: ParseException => JNothing
     }
 
-    def resolveProperty(value: JValue, properties: Seq[JValue]): JValue = properties.headOption match {
+    protected def writeData(data: JValue) {
+        val writer = new FileWriter(new File(connectionString))
+        try {
+            writer.write(compact(render(data)))
+        }
+        finally {
+            writer.flush()
+            writer.close()
+        }
+    }
+
+    def resolveProperty(value: JValue, properties: Seq[JValue]): JValue = properties.headOption.getOrElse { None } match {
         case JString(s: String) => resolveProperty(value \ s, properties.tail)
         case JInt(i: BigInt) => resolveProperty(value(i.intValue), properties.tail)
         case _ => value
@@ -124,9 +132,12 @@ abstract class StupidJSONDataSource(override val uri: URI) extends DataSource(ur
  * Works with a file that contains a single JSON object. Each key on the object maps to a single JSON object.
  * The objects stored on the object do not need to be uniformly structured
  */
-class StupidJSONObjectDataSource(override val uri: URI) extends StupidJSONDataSource(uri) {
+class StupidJSONObjectDataSource(override val connectionString: String) extends StupidJSONDataSource(connectionString) {
 
-    protected def readData = super.readData match { case o: JObject => o }
+    override protected def readData: JObject = super.readData match {
+        case o: JObject => o
+        case JNothing=> new JObject(Nil)
+    }
 
     //TODO: Implement sort and slice handling
     def getItemsById(itemIds: Seq[JValue] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[JArray] = Nil, itemRange: (JInt, JInt) = (0,-1)) = for {
@@ -135,10 +146,11 @@ class StupidJSONObjectDataSource(override val uri: URI) extends StupidJSONDataSo
     } yield (new JString(name), filterItemContent(value, contentFilters))
 
     //TODO: This is shared with StupidJSONArrayDataSource. Find a way to factor it out into StupidJSONDataSource
-    protected def filterItems(items: Seq[JField], filters: Seq[(JArray, JString, JValue)]): Seq[JField] = filters.headOption match {
-        case (JArray(properties), JString(comparator), targetValue) => filterItems(items filter { (item: JField) => filterItem(item.value, properties, comparator, targetValue) }, filters.tail)
-        case _ => items
-    }
+    protected def filterItems(items: Seq[JField], filters: Seq[(JArray, JString, JValue)]): Seq[JField] = try {
+        filters.head match {
+            case (JArray(properties), JString(comparator), targetValue) => filterItems(items filter { (item: JField) => filterItem(item.value, properties, comparator, targetValue) }, filters.tail)
+        }
+    } catch { case ex: NoSuchElementException => items }
 
     //TODO: Implement sort and slice handling
     def getItemsByFilter(itemFilters: Seq[(JArray, JString, JValue)] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[JArray] = Nil, itemRange: (JInt, JInt) = (0,-1)) = for {
@@ -158,8 +170,8 @@ class StupidJSONObjectDataSource(override val uri: URI) extends StupidJSONDataSo
 
     def deleteItemsById(ids: Seq[JValue]) = writeData(new JObject(readData.obj filter { case JField(name, value: JObject) => !(ids contains name) }))
 }
-
-class StupidJSONArrayDataSource(override val uri: URI) extends StupidJSONDataSource(uri) {
+/*
+class StupidJSONArrayDataSource(override val uri: String) extends StupidJSONDataSource(uri) {
 
     protected def readData = super.readData match { case a: JArray => a }
 
@@ -177,4 +189,4 @@ class StupidJSONArrayDataSource(override val uri: URI) extends StupidJSONDataSou
         JArray(List(JString(name), value: JValue)) <- filterItems(readData.arr, itemFilters)
     } yield (new JString(name), filterItemContent(value, contentFilters))
 }
-
+*/
