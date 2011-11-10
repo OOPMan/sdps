@@ -4,8 +4,10 @@ import scala.io.Source.fromFile
 import net.liftweb.json._
 import net.liftweb.json.Implicits._
 import net.liftweb.json.JsonParser.ParseException
-import java.io.{FileNotFoundException, File, FileWriter}
 import java.util.{NoSuchElementException, UUID}
+import java.io.{FileNotFoundException, File, FileWriter}
+import java.util.concurrent.locks.{ReentrantReadWriteLock}
+import java.util.concurrent.TimeUnit
 
 /**
  * Created by IntelliJ IDEA.
@@ -17,22 +19,36 @@ import java.util.{NoSuchElementException, UUID}
  * A Stupid JSON DataSource. Loads JSON data from a file. Very stupid :-)
  *
  */
-abstract class StupidJSONDataSource(override val connectionString: String) extends DataSource(connectionString) {
+abstract class StupidJSONDataSource(override val connectionString: String, val maxWaitForLock:Long = 100) extends DataSource(connectionString) {
+    val sourceLock = new ReentrantReadWriteLock()
+    val readLock = sourceLock.readLock()
+    val writeLock = sourceLock.writeLock()
 
-    protected def readData = try { parse(fromFile(connectionString).mkString) } catch {
-        case e: FileNotFoundException => JNothing
-        case e: ParseException => JNothing
+    protected def readData = {
+        val haveLock = readLock.tryLock(maxWaitForLock, TimeUnit.MILLISECONDS)
+        if(haveLock) try {
+            parse(fromFile(connectionString).mkString) }
+        catch  {
+            case e: FileNotFoundException => JNothing
+            case e: ParseException => JNothing
+        } finally {
+            readLock.unlock()
+        }
+        else throw new Exception("Unable to obtain Read Lock")
     }
 
     protected def writeData(data: JValue) {
+        val haveLock = writeLock.tryLock(maxWaitForLock, TimeUnit.MILLISECONDS)
         val writer = new FileWriter(new File(connectionString))
-        try {
+        if(haveLock) try {
             writer.write(compact(render(data)))
         }
         finally {
             writer.flush()
             writer.close()
+            writeLock.unlock()
         }
+        else throw new Exception("Unable to obtain Write Lock")
     }
 
     def resolveProperty(value: JValue, properties: Seq[JValue]): JValue = properties.headOption.getOrElse { None } match {
