@@ -161,7 +161,6 @@ trait JSONObjectDataSource extends JSONDataSource {
         case JNothing => new JObject(Nil)
     }
 
-    //TODO: Re-organise this code?
     protected def orderItems(items: Seq[(JValue, JValue)], orderBy: Seq[(JString, JArray)] = Nil) = if(orderBy.isEmpty) items else {
         /**
          * Logic for comparison:
@@ -170,7 +169,6 @@ trait JSONObjectDataSource extends JSONDataSource {
          * 2: If not return value for next item
          */
         def compare(v1: JValue, v2: JValue, properties: Seq[(JString, JArray)]): Boolean = try {
-            //TODO: Reorganize this to reduce duplication
             val (sortValue, JArray(property)) = properties.head
             val returnValue =
                     if(isLessThan(resolveProperty(v1, property), resolveProperty(v2, property))) true
@@ -178,16 +176,6 @@ trait JSONObjectDataSource extends JSONDataSource {
                     else false
             if(sortValue == "asc") returnValue
             else !returnValue
-//            properties.head match {
-//                case (JString("asc"), JArray(property)) =>
-//                    if(isLessThan(resolveProperty(v1, property), resolveProperty(v2, property))) true
-//                    else if(isEqualTo(resolveProperty(v1, property), resolveProperty(v2, property))) compare(v1, v2, properties.tail)
-//                    else false
-//                case (JString("desc"), JArray(property)) =>
-//                    if(isLessThan(resolveProperty(v1, property), resolveProperty(v2, property))) false
-//                    else if(isEqualTo(resolveProperty(v1, property), resolveProperty(v2, property))) compare(v1, v2, properties.tail)
-//                    else true
-//            }
         } catch {
             case _ => isLessThan(v1, v2)
         }
