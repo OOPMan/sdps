@@ -19,37 +19,12 @@ import java.util.concurrent.TimeUnit
  * A Stupid JSON DataSource. Loads JSON data from a file. Very stupid :-)
  *
  */
-abstract class StupidJSONDataSource(override val connectionString: String, val maxWaitForLock:Long = 100) extends DataSource(connectionString) {
-    val sourceLock = new ReentrantReadWriteLock()
-    val readLock = sourceLock.readLock()
-    val writeLock = sourceLock.writeLock()
 
-    protected def readData = {
-        val haveLock = readLock.tryLock(maxWaitForLock, TimeUnit.MILLISECONDS)
-        if(haveLock) try {
-            parse(fromFile(connectionString).mkString) }
-        catch  {
-            case e: FileNotFoundException => JNothing
-            case e: ParseException => JNothing
-        } finally {
-            readLock.unlock()
-        }
-        else throw new Exception("Unable to obtain Read Lock")
-    }
+abstract class JSONDataSource(override val connectionString: String) extends DataSource(connectionString) {
 
-    protected def writeData(data: JValue) {
-        val haveLock = writeLock.tryLock(maxWaitForLock, TimeUnit.MILLISECONDS)
-        val writer = new FileWriter(new File(connectionString))
-        if(haveLock) try {
-            writer.write(compact(render(data)))
-        }
-        finally {
-            writer.flush()
-            writer.close()
-            writeLock.unlock()
-        }
-        else throw new Exception("Unable to obtain Write Lock")
-    }
+    protected def readData: JValue = JNothing
+
+    protected def writeData(data: JValue): Unit
 
     def resolveProperty(value: JValue, properties: Seq[JValue]): JValue = properties.headOption.getOrElse { None } match {
         case JString(s: String) => resolveProperty(value \ s, properties.tail)
@@ -142,21 +117,87 @@ abstract class StupidJSONDataSource(override val connectionString: String, val m
 
 }
 
-/**
- * A Stupid JSON Object DataSource
- *
- * Works with a file that contains a single JSON object. Each key on the object maps to a single JSON object.
- * The objects stored on the object do not need to be uniformly structured
- */
-class StupidJSONObjectDataSource(override val connectionString: String) extends StupidJSONDataSource(connectionString) {
+abstract class JSONFileDataSource(override val connectionString: String,  val maxWaitForLock: Int = 100) extends JSONDataSource(connectionString) {
+    val sourceLock = new ReentrantReadWriteLock()
+    val readLock = sourceLock.readLock()
+    val writeLock = sourceLock.writeLock()
+
+    override protected def readData = {
+        if(!readLock.tryLock(maxWaitForLock, TimeUnit.MILLISECONDS)) throw new Exception("Unable to obtain Read Lock")
+        try {
+            parse(fromFile(connectionString).mkString) }
+        catch  {
+            case e: FileNotFoundException => JNothing
+            case e: ParseException => JNothing
+        } finally {
+            readLock.unlock()
+        }
+    }
+
+    protected def writeData(data: JValue) {
+        if(!writeLock.tryLock(maxWaitForLock, TimeUnit.MILLISECONDS)) throw new Exception("Unable to obtain Read Lock")
+        val writer = new FileWriter(new File(connectionString))
+        try {
+            writer.write(compact(render(data)))
+        }
+        finally {
+            writer.flush()
+            writer.close()
+            writeLock.unlock()
+        }
+    }
+}
+
+abstract class JSONHTTPDataSource(override val connectionString: String) extends JSONDataSource(connectionString) {
+    // TODO: Implement readData
+    // TODO: Implement writeData
+
+}
+
+trait JSONObjectDataSource extends JSONDataSource {
 
     override protected def readData: JObject = super.readData match {
         case o: JObject => o
-        case JNothing=> new JObject(Nil)
+        case JNothing => new JObject(Nil)
     }
 
+    //TODO: Re-organise this code?
+    protected def orderItems(items: Seq[(JValue, JValue)], orderBy: Seq[(JString, JArray)] = Nil) = if(orderBy.isEmpty) items else {
+        /**
+         * Logic for comparison:
+         *
+         * 1: Check that property value on e1 is less than property value on e2
+         * 2: If not return value for next item
+         */
+        def compare(v1: JValue, v2: JValue, properties: Seq[(JString, JArray)]): Boolean = try {
+            //TODO: Reorganize this to reduce duplication
+            val (sortValue, JArray(property)) = properties.head
+            val returnValue =
+                    if(isLessThan(resolveProperty(v1, property), resolveProperty(v2, property))) true
+                    else if(isEqualTo(resolveProperty(v1, property), resolveProperty(v2, property))) compare(v1, v2, properties.tail)
+                    else false
+            if(sortValue == "asc") returnValue
+            else !returnValue
+//            properties.head match {
+//                case (JString("asc"), JArray(property)) =>
+//                    if(isLessThan(resolveProperty(v1, property), resolveProperty(v2, property))) true
+//                    else if(isEqualTo(resolveProperty(v1, property), resolveProperty(v2, property))) compare(v1, v2, properties.tail)
+//                    else false
+//                case (JString("desc"), JArray(property)) =>
+//                    if(isLessThan(resolveProperty(v1, property), resolveProperty(v2, property))) false
+//                    else if(isEqualTo(resolveProperty(v1, property), resolveProperty(v2, property))) compare(v1, v2, properties.tail)
+//                    else true
+//            }
+        } catch {
+            case _ => isLessThan(v1, v2)
+        }
+        items sortWith { (v1, v2) => compare(v1._2, v2._2, orderBy) }
+    }
+
+    protected def sliceItems(items: Seq[(JValue, JValue)], itemRange: (JInt, JInt)) = items.slice(itemRange._1.num.toInt, itemRange._2.num.toInt)
+
     //TODO: Implement sort and slice handling
-    def getItemsById(itemIds: Seq[JValue] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[JArray] = Nil, itemRange: (JInt, JInt) = (0,-1)) = for {
+    def getItemsById(itemIds: Seq[JValue] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0,-1)) = for {
         JField(name, value: JObject) <- readData.obj
         if itemIds.isEmpty || (itemIds contains name)
     } yield (new JString(name), filterItemContent(value, contentFilters))
@@ -169,7 +210,7 @@ class StupidJSONObjectDataSource(override val connectionString: String) extends 
     } catch { case ex: NoSuchElementException => items }
 
     //TODO: Implement sort and slice handling
-    def getItemsByFilter(itemFilters: Seq[(JArray, JString, JValue)] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[JArray] = Nil, itemRange: (JInt, JInt) = (0,-1)) = for {
+    def getItemsByFilter(itemFilters: Seq[(JArray, JString, JValue)] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0,-1)) = for {
         JField(name, value: JObject) <- filterItems(readData.obj, itemFilters)
     } yield (new JString(name), filterItemContent(value, contentFilters))
 
@@ -186,6 +227,17 @@ class StupidJSONObjectDataSource(override val connectionString: String) extends 
 
     def deleteItemsById(ids: Seq[JValue]) = writeData(new JObject(readData.obj filter { case JField(name, value: JObject) => !(ids contains name) }))
 }
+
+/**
+ * A Stupid JSON Object DataSource
+ *
+ * Works with a file that contains a single JSON object. Each key on the object maps to a single JSON object.
+ * The objects stored on the object do not need to be uniformly structured
+ */
+class JSONObjectFileDataSource(override val connectionString: String, override val maxWaitForLock: Int = 100) extends JSONFileDataSource(connectionString, maxWaitForLock) with JSONObjectDataSource
+
+//class JSONObjectHTTPDataSource(override val connectionString: String, override val maxWaitForLock: Int = 100) extends JSONHTTPDataSource(connectionString) with JSONObjectDataSource
+
 /*
 class StupidJSONArrayDataSource(override val uri: String) extends StupidJSONDataSource(uri) {
 
