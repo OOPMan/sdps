@@ -2,7 +2,6 @@ package com.sdps.datasources
 
 import net.liftweb.json._
 import net.liftweb.json.Implicits._
-import java.net.URI
 
 /**
  * Created by IntelliJ IDEA.
@@ -12,9 +11,9 @@ import java.net.URI
  * To change this template use File | Settings | File Templates.
  */
 
-abstract class DataSource(val uri: URI) {
+abstract class DataSource(val connectionString: String) {
 
-    def getItemsById(itemIds: Seq[JValue] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[JArray] = Nil, itemRange: (JInt, JInt) = (0,-1)): Seq[(JValue, JValue)]
+    def getItemsById(itemIds: Seq[JValue] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0,-1)): Seq[(JValue, JValue)]
 
     /**
      * Filters following a fairly simple format. Each Filter consists of a tuple containing:
@@ -42,7 +41,7 @@ abstract class DataSource(val uri: URI) {
      *
      * TODO: Detail the manner in which the comparison operators interact with various values
      */
-    def getItemsByFilter(itemFilters: Seq[(JArray, JString, JValue)] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[JArray] = Nil, itemRange: (JInt, JInt) = (0,-1)): Seq[(JValue, JValue)]
+    def getItemsByFilter(itemFilters: Seq[(JArray, JString, JValue)] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0,-1)): Seq[(JValue, JValue)]
 
     def addItems(items: Seq[JValue]): Seq[JValue]
 
