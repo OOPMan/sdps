@@ -1,11 +1,11 @@
 package com.sdps.test.datasources
 
-import com.sdps.datasources.StupidJSONObjectDataSource
 import org.scalatest.FunSuite
 import org.scalatest.BeforeAndAfterAll
 import java.io.File
 import net.liftweb.json._
 import net.liftweb.json.JsonDSL._
+import com.sdps.datasources.JSONObjectFileDataSource
 
 /**
  * Created by IntelliJ IDEA.
@@ -15,10 +15,10 @@ import net.liftweb.json.JsonDSL._
  * To change this template use File | Settings | File Templates.
  */
 
-class StupidJSONObjectDataSourceTest extends FunSuite with BeforeAndAfterAll {
+class JSONObjectFileDataSourceTest extends FunSuite with BeforeAndAfterAll {
 
-    val tempFile = File.createTempFile("StupidJSONObjectDataSourceTest", ".json")
-    val dataSource = new StupidJSONObjectDataSource(tempFile.getAbsolutePath)
+    val tempFile = File.createTempFile("JSONObjectFileDataSourceTest", ".json")
+    val dataSource = new JSONObjectFileDataSource(tempFile.getAbsolutePath)
     var idObjectList: Seq[(JValue, JValue)] = Nil
     var idObjectMap: Map[JValue, JValue] = Map()
     implicit val formats = DefaultFormats
