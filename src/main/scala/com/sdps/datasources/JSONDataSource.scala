@@ -193,7 +193,6 @@ trait JSONObjectDataSource extends JSONDataSource {
         else items.slice(from.toInt, until.toInt)
     }
 
-    //TODO: Implement sort and slice handling
     def getItemsById(itemIds: Seq[JValue] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0, -1)) =
         sliceItems(
             orderItems(
@@ -207,15 +206,19 @@ trait JSONObjectDataSource extends JSONDataSource {
     //TODO: This is shared with StupidJSONArrayDataSource. Find a way to factor it out into StupidJSONDataSource
     protected def filterItems(items: Seq[JField], filters: Seq[(JArray, JString, JValue)]): Seq[JField] = try {
         filters.head match {
-            case (JArray(properties), JString(comparator), targetValue) => filterItems(items filter { (item: JField) => filterItem(item.value, properties, comparator, targetValue) }, filters.tail)
+            case (JArray(properties), JString(comparator), targetValue) =>
+                filterItems(items filter { (item: JField) => filterItem(item.value, properties, comparator, targetValue) }, filters.tail)
         }
     } catch { case ex: NoSuchElementException => items }
 
-    //TODO: Implement sort and slice handling
     def getItemsByFilter(itemFilters: Seq[(JArray, JString, JValue)] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0,-1)) =
-    for {
-        JField(name, value: JObject) <- filterItems(readData.obj, itemFilters)
-    } yield (new JString(name), filterItemContent(value, contentFilters))
+        sliceItems(
+            orderItems(
+                (for {
+                    JField(name, value: JObject) <- filterItems(readData.obj, itemFilters)
+                } yield (new JString(name), filterItemContent(value, contentFilters))),
+                orderBy),
+            itemRange)
 
     def addItems(items: Seq[JValue]) = {
         val itemIds = for(item <- items) yield new JString(UUID.randomUUID.toString)
