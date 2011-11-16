@@ -182,13 +182,27 @@ trait JSONObjectDataSource extends JSONDataSource {
         items sortWith { (v1, v2) => compare(v1._2, v2._2, orderBy) }
     }
 
-    protected def sliceItems(items: Seq[(JValue, JValue)], itemRange: (JInt, JInt)) = items.slice(itemRange._1.num.toInt, itemRange._2.num.toInt)
+    protected def sliceItems(items: Seq[(JValue, JValue)], itemRange: (JInt, JInt)): Seq[(JValue, JValue)] = {
+        val (JInt(from), JInt(until)) = itemRange
+        // Handle Negative Indexes
+        if(from < 0)  sliceItems(items, (items.length + 1 + from,  itemRange._2))
+        else if(until < 0) sliceItems(items, (itemRange._1, items.length + 1 + until))
+        // Handle Reversing
+        else if(from > until) sliceItems(items.reverse, (itemRange._2, itemRange._1))
+        // Slice
+        else items.slice(from.toInt, until.toInt)
+    }
 
     //TODO: Implement sort and slice handling
-    def getItemsById(itemIds: Seq[JValue] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0,-1)) = for {
-        JField(name, value: JObject) <- readData.obj
-        if itemIds.isEmpty || (itemIds contains name)
-    } yield (new JString(name), filterItemContent(value, contentFilters))
+    def getItemsById(itemIds: Seq[JValue] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0, -1)) =
+        sliceItems(
+            orderItems(
+                (for {
+                    JField(name, value: JObject) <- readData.obj
+                    if itemIds.isEmpty || (itemIds contains name)
+                } yield (new JString(name), filterItemContent(value, contentFilters))),
+                orderBy),
+            itemRange)
 
     //TODO: This is shared with StupidJSONArrayDataSource. Find a way to factor it out into StupidJSONDataSource
     protected def filterItems(items: Seq[JField], filters: Seq[(JArray, JString, JValue)]): Seq[JField] = try {
@@ -198,7 +212,8 @@ trait JSONObjectDataSource extends JSONDataSource {
     } catch { case ex: NoSuchElementException => items }
 
     //TODO: Implement sort and slice handling
-    def getItemsByFilter(itemFilters: Seq[(JArray, JString, JValue)] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0,-1)) = for {
+    def getItemsByFilter(itemFilters: Seq[(JArray, JString, JValue)] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0,-1)) =
+    for {
         JField(name, value: JObject) <- filterItems(readData.obj, itemFilters)
     } yield (new JString(name), filterItemContent(value, contentFilters))
 
