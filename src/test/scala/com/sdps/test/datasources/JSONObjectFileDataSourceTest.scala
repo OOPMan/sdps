@@ -30,7 +30,7 @@ class JSONObjectFileDataSourceTest extends FunSuite with BeforeAndAfterAll {
         ("field1" -> "string3") ~ ("field2" -> 3) ~ ("field3" -> 3.0) ~ ("field4" -> true)  ~ ("field5" -> List(3,4,5)) ~ ("field6" -> ("a" -> 3) ~ ("b" -> 6) ~  ("c" -> 9)),
         ("field1" -> "string4") ~ ("field2" -> 4) ~ ("field3" -> 4.0) ~ ("field4" -> false) ~ ("field5" -> List(4,5,6)) ~ ("field6" -> ("a" -> 4) ~ ("b" -> 8) ~  ("c" -> 12)),
         ("field1" -> "string5") ~ ("field2" -> 5) ~ ("field3" -> 5.0) ~ ("field4" -> true)  ~ ("field5" -> List(5,6,7)) ~ ("field6" -> ("a" -> 5) ~ ("b" -> 10) ~ ("c" -> 15)),
-        ("name" -> "something different") ~ ("description" -> (None: Option[String])) ~ ("field3" -> 6.0)
+        ("name" -> "something different") ~ ("description" -> "xyz") ~ ("field3" -> 6.0)
     )
 
     //TODO: String ItemFilter
@@ -72,11 +72,9 @@ class JSONObjectFileDataSourceTest extends FunSuite with BeforeAndAfterAll {
     }
 
     test("confirm written data") {
-        assert(
-            (for {
-                ((writtenObjectId, writtenObject), (readObjectId, readObject)) <- idObjectList zip dataSource.getItemsById()
-            } yield (readObject == writtenObject) && (writtenObjectId == readObjectId)) contains false,
-            "read data does not match written fixture")
+        val items = dataSource.getItemsById()
+        expect(jsonObjects.length) { items.length }
+        assert((for { (id, objekt) <- items } yield idObjectMap(id) == objekt) reduce { _ & _ }, "read data does not match written data")
     }
 
     test("query for data with field2 < 3") {
