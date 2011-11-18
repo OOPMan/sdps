@@ -84,7 +84,7 @@ abstract class JSONDataSource(override val connectionString: String) extends Dat
         val comparisonResult = comparator.stripPrefix("!") match {
             case "<"    => isLessThan(resolveProperty(item, properties), value)
             case "<="   => isLessThanOrEqualTo(resolveProperty(item, properties), value)
-            case "=="   => isEqualTo(resolveProperty(item, properties), value)
+            case "="   => isEqualTo(resolveProperty(item, properties), value)
             case ">="   => isGreaterThanOrEqualTo(resolveProperty(item, properties), value)
             case ">"    => isGreaterThan(resolveProperty(item, properties), value)
             case "in"   => isIn(resolveProperty(item, properties), value)
