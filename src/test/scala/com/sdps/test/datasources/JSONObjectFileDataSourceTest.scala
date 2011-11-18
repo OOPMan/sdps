@@ -33,21 +33,41 @@ class JSONObjectFileDataSourceTest extends FunSuite with BeforeAndAfterAll {
         ("name" -> "something different") ~ ("description" -> "xyz") ~ ("field3" -> 6.0)
     )
 
+    protected def generateFilters(filters: (Int, List[JValue], JString, Any)*) = for((count, property, comparator, value) <- filters) yield
+    {
+        val actualValue = value match {
+            case value: String => JString(value)
+            case value: Int => JInt(value)
+            case value: BigInt => JInt(value)
+            case value: Double => JDouble(value)
+            case value: Float => JDouble(value)
+            //TODO: Come up with a good way to handle Lists and Maps?
+        }
+        ("%s %-3s %s".format(property.map({ case propertyName: JString => propertyName.s}).mkString("."), comparator.s, value), count, (JArray(property), comparator, actualValue) :: Nil)
+    }
+
     //TODO: String ItemFilter
     // Int ItemFilter
-    val filterForObjectsWithField2LessThan3 = (JArray("field2" :: Nil), JString("<"), JInt(3)) :: Nil
-    val filterForObjectsWithField2LessThanOrEqualTo3 = (JArray("field2" :: Nil), JString("<="), JInt(3)) :: Nil
-    val filterForObjectsWithField2EqualTo3 = (JArray("field2" :: Nil), JString("=="), JInt(3)) :: Nil
-    val filterForObjectsWithField2GreaterThanEqualTo3 = (JArray("field2" :: Nil), JString(">="), JInt(3)) :: Nil
-    val filterForObjectsWithField2GreaterThan3 = (JArray("field2" :: Nil), JString(">"), JInt(3)) :: Nil
-    val filterForObjectsWithField2NotEqualTo3 = (JArray("field2" :: Nil), JString("!="), JInt(3)) :: Nil
-    // Float ItemFilter
-    val filterForObjectsWithField2LessThan3point0 = (JArray("field3" :: Nil), JString("<"), JDouble(3.0)) :: Nil
-    val filterForObjectsWithField2LessThanOrEqualTo3point0 = (JArray("field3" :: Nil), JString("<="), JDouble(3.0)) :: Nil
-    val filterForObjectsWithField2EqualTo3point0 = (JArray("field3" :: Nil), JString("=="), JDouble(3.0)) :: Nil
-    val filterForObjectsWithField2GreaterThanEqualTo3point0 = (JArray("field3" :: Nil), JString(">="), JDouble(3.0)) :: Nil
-    val filterForObjectsWithField2GreaterThan3point0 = (JArray("field3" :: Nil), JString(">"), JDouble(3.0)) :: Nil
-    val filterForObjectsWithField2NotEqualTo3point0 = (JArray("field3" :: Nil), JString("!="), JDouble(3.0)) :: Nil
+    val itemFilters = generateFilters(
+        (2, "field2" :: Nil, "<", 3),
+        (3, "field2" :: Nil, "<=", 3),
+        (1, "field2" :: Nil, "=", 3),
+        (3, "field2" :: Nil, ">=", 3),
+        (2, "field2" :: Nil, ">", 3),
+        (1, "field2" :: Nil, "in", 3),
+        (4, "field2" :: Nil, "!<", 3),
+        (3, "field2" :: Nil, "!<=", 3),
+        (5, "field2" :: Nil, "!=", 3),
+        (3, "field2" :: Nil, "!>=", 3),
+        (4, "field2" :: Nil, "!>", 3),
+        (5, "field2" :: Nil, "!in", 3),
+        (2, "field3" :: Nil, "<", 3.0),
+        (3, "field3" :: Nil, "<=", 3.0),
+        (1, "field3" :: Nil, "=", 3.0),
+        (4, "field3" :: Nil, ">=", 3.0),
+        (3, "field3" :: Nil, ">", 3.0),
+        (5, "field3" :: Nil, "!=", 3.0))
+    //TODO: More Float itemFilters
     //TODO: Boolean ItemFilter
     //TODO: Object ItemFilter
     //TODO: Array ItemFilter
@@ -77,56 +97,12 @@ class JSONObjectFileDataSourceTest extends FunSuite with BeforeAndAfterAll {
         assert((for { (id, objekt) <- items } yield idObjectMap(id) == objekt) reduce { _ & _ }, "read data does not match written data")
     }
 
-    test("query for data with field2 < 3") {
-        val items = dataSource.getItemsByFilter(filterForObjectsWithField2LessThan3)
-        expect(2) { items.length }
-        assert((for { (id, objekt) <- items } yield idObjectMap(id) == objekt) reduce { _ & _ }, "query for objects with field2 < 3 failed")
-    }
-    test("query for data with field2 <= 3") {
-        val items = dataSource.getItemsByFilter(filterForObjectsWithField2LessThanOrEqualTo3)
-        expect(3) { items.length }
-        assert((for { (id, objekt) <- items } yield idObjectMap(id) == objekt) reduce { _ & _ }, "query for objects with field2 <= 3 failed")
-    }
-    test("query for data with field2 == 3") {
-        val items = dataSource.getItemsByFilter(filterForObjectsWithField2EqualTo3)
-        expect(1) { items.length }
-        assert((for { (id, objekt) <- items } yield idObjectMap(id) == objekt) reduce { _ & _ }, "query for objects with field2 == 3 failed")
-    }
-    test("query for data with field2 >= 3") {
-        val items = dataSource.getItemsByFilter(filterForObjectsWithField2GreaterThanEqualTo3)
-        expect(3) { items.length }
-        assert((for { (id, objekt) <- items } yield idObjectMap(id) == objekt) reduce { _ & _ }, "query for objects with field2 >= 3 failed")
-    }
-    test("query for data with field2 > 3") {
-        val items = dataSource.getItemsByFilter(filterForObjectsWithField2GreaterThan3)
-        expect(2) { items.length }
-        assert((for { (id, objekt) <- items } yield idObjectMap(id) == objekt) reduce { _ & _ }, "query for objects with field2 > 3 failed")
-    }
-
-    test("query for data with field2 < 3.0") {
-        val items = dataSource.getItemsByFilter(filterForObjectsWithField2LessThan3point0)
-        expect(2) { items.length }
-        assert((for { (id, objekt) <- items } yield idObjectMap(id) == objekt) reduce { _ & _ }, "query for objects with field2 < 3.0 failed")
-    }
-    test("query for data with field2 <= 3.0") {
-        val items = dataSource.getItemsByFilter(filterForObjectsWithField2LessThanOrEqualTo3point0)
-        expect(3) { items.length }
-        assert((for { (id, objekt) <- items } yield idObjectMap(id) == objekt) reduce { _ & _ }, "query for objects with field2 <= 3.0 failed")
-    }
-    test("query for data with field2 == 3.0") {
-        val items = dataSource.getItemsByFilter(filterForObjectsWithField2EqualTo3point0)
-        expect(1) { items.length }
-        assert((for { (id, objekt) <- items } yield idObjectMap(id) == objekt) reduce { _ & _ }, "query for objects with field2 == 3.0 failed")
-    }
-    test("query for data with field2 >= 3.0") {
-        val items = dataSource.getItemsByFilter(filterForObjectsWithField2GreaterThanEqualTo3point0)
-        expect(4) { items.length }
-        assert((for { (id, objekt) <- items } yield idObjectMap(id) == objekt) reduce { _ & _ }, "query for objects with field2 >= 3.0 failed") //TODO: Fix
-    }
-    test("query for data with field2 > 3.0") {
-        val items = dataSource.getItemsByFilter(filterForObjectsWithField2GreaterThan3point0)
-        expect(3) { items.length }
-        assert((for { (id, objekt) <- items } yield idObjectMap(id) == objekt) reduce { _ & _ }, "query for objects with field2 > 3.0 failed") //TODO: Fix
+    for((name, length, filter) <- itemFilters) {
+        test("query for data with %s".format(name)) {
+            val items = dataSource.getItemsByFilter(filter)
+            expect(length) { items.length }
+            assert((for { (id, objekt) <- items } yield idObjectMap(id) == objekt) reduce { _ & _ }, "query for objects with %s failed".format(name))
+        }
     }
 
     test("filter written data") {
