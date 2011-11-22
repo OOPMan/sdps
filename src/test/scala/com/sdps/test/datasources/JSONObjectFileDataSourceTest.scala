@@ -23,6 +23,7 @@ class JSONObjectFileDataSourceTest extends FunSuite with BeforeAndAfterAll {
     var idObjectList: Seq[(JValue, JValue)] = Nil
     var idObjectMap: Map[JValue, JValue] = Map()
     implicit val formats = DefaultFormats
+    Either
 
     val jsonObjects = List(
         ("field1" -> "string1") ~ ("field2" -> 1) ~ ("field3" -> 1.0) ~ ("field4" -> true)  ~ ("field5" -> List(1,2,3)) ~ ("field6" -> ("a" -> 1) ~ ("b" -> 2) ~  ("c" -> 3)),
@@ -33,22 +34,33 @@ class JSONObjectFileDataSourceTest extends FunSuite with BeforeAndAfterAll {
         ("name" -> "something different") ~ ("description" -> "xyz") ~ ("field3" -> 6.0)
     )
 
-    protected def generateFilters(filters: (Int, List[JValue], JString, Any)*) = for((count, property, comparator, value) <- filters) yield
+    protected def generateFilters(filters: (Int, JValue, JString, JValue)*) = for((count, left, comparator, right) <- filters) yield
     {
-        val actualValue = value match {
-            case value: String => JString(value)
-            case value: Int => JInt(value)
-            case value: BigInt => JInt(value)
-            case value: Double => JDouble(value)
-            case value: Float => JDouble(value)
-            //TODO: Come up with a good way to handle Lists and Maps?
-        }
-        ("%s %-3s %s".format(property.map({ case propertyName: JString => propertyName.s}).mkString("."), comparator.s, value), count, (JArray(property), comparator, actualValue) :: Nil)
+        //TODO: Remove this?
+//        def convertValue(value: Any): JValue = value match {
+//            case value: String => value
+//            case value: Int => value
+//            case value: BigInt => value
+//            case value: Double => value
+//            case value: Float => value
+//            case value: Boolean => value
+//            case value: List => value.map { convertValue(_) }
+//            case value: Map => value.map { case (k: String, v: Any) => JField(k, convertValue(v)) }
+//            case value: JValue => value
+//        }
+        ("%s %-3s %s".format(left, comparator.s, right), count, (left, comparator, right) :: Nil)
     }
 
     //TODO: String ItemFilter
-    // Int ItemFilter
     val itemFilters = generateFilters(
+        (2, "field1" :: Nil, "<", "string3"),
+        (3, "field1" :: Nil, "<=", "string3"),
+        (1, "field1" :: Nil, "=", "string3"),
+        (3, "field1" :: Nil, ">=", "string3"),
+        (2, "field1" :: Nil, ">", "string3"),
+        (1, "field1" :: Nil, "in", "string3string"),
+        (5, "string", "in", "field1" :: Nil),
+        (5, "field1" :: Nil, "like", "string\\d"),
         (2, "field2" :: Nil, "<", 3),
         (3, "field2" :: Nil, "<=", 3),
         (1, "field2" :: Nil, "=", 3),
@@ -66,9 +78,20 @@ class JSONObjectFileDataSourceTest extends FunSuite with BeforeAndAfterAll {
         (1, "field3" :: Nil, "=", 3.0),
         (4, "field3" :: Nil, ">=", 3.0),
         (3, "field3" :: Nil, ">", 3.0),
-        (5, "field3" :: Nil, "!=", 3.0))
-    //TODO: More Float itemFilters
-    //TODO: Boolean ItemFilter
+        (1, "field3" :: Nil, "in", 3.0),
+        (4, "field3" :: Nil, "!<", 3.0),
+        (3, "field3" :: Nil, "!<=", 3.0),
+        (5, "field3" :: Nil, "!=", 3.0),
+        (2, "field3" :: Nil, "!>=", 3.0),
+        (3, "field3" :: Nil, "!>", 3.0),
+        (5, "field3" :: Nil, "!in", 3.0),
+        (2, "field4" :: Nil, "<", true),
+        (5, "field4" :: Nil, "<=", true),
+        (3, "field4" :: Nil, "=", true),
+        (3, "field4" :: Nil, ">=", true),
+        (0, "field4" :: Nil, ">", true),
+        (3, "field4" :: Nil, "in", true)
+    )
     //TODO: Object ItemFilter
     //TODO: Array ItemFilter
 
@@ -101,7 +124,7 @@ class JSONObjectFileDataSourceTest extends FunSuite with BeforeAndAfterAll {
         test("query for data with %s".format(name)) {
             val items = dataSource.getItemsByFilter(filter)
             expect(length) { items.length }
-            assert((for { (id, objekt) <- items } yield idObjectMap(id) == objekt) reduce { _ & _ }, "query for objects with %s failed".format(name))
+            if(length > 0) assert((for { (id, objekt) <- items } yield idObjectMap(id) == objekt) reduce { _ & _ }, "query for objects with %s failed".format(name))
         }
     }
 
