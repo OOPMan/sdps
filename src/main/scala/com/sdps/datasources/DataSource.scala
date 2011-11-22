@@ -41,7 +41,7 @@ abstract class DataSource(val connectionString: String) {
      *
      * TODO: Detail the manner in which the comparison operators interact with various values
      */
-    def getItemsByFilter(itemFilters: Seq[(JArray, JString, JValue)] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0,-1)): Seq[(JValue, JValue)]
+    def getItemsByFilter(itemFilters: Seq[(JValue, JString, JValue)] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0,-1)): Seq[(JValue, JValue)]
 
     def addItems(items: Seq[JValue]): Seq[JValue]
 
