@@ -35,23 +35,8 @@ class JSONObjectFileDataSourceTest extends FunSuite with BeforeAndAfterAll {
     )
 
     protected def generateFilters(filters: (Int, JValue, JString, JValue)*) = for((count, left, comparator, right) <- filters) yield
-    {
-        //TODO: Remove this?
-//        def convertValue(value: Any): JValue = value match {
-//            case value: String => value
-//            case value: Int => value
-//            case value: BigInt => value
-//            case value: Double => value
-//            case value: Float => value
-//            case value: Boolean => value
-//            case value: List => value.map { convertValue(_) }
-//            case value: Map => value.map { case (k: String, v: Any) => JField(k, convertValue(v)) }
-//            case value: JValue => value
-//        }
-        ("%s %-3s %s".format(left, comparator.s, right), count, (left, comparator, right) :: Nil)
-    }
+        ("%s %-3s %s".format(compact(render(left)), comparator.s, compact(render(right))), count, (left, comparator, right) :: Nil)
 
-    //TODO: String ItemFilter
     val itemFilters = generateFilters(
         (2, "field1" :: Nil, "<", "string3"),
         (3, "field1" :: Nil, "<=", "string3"),
@@ -61,6 +46,14 @@ class JSONObjectFileDataSourceTest extends FunSuite with BeforeAndAfterAll {
         (1, "field1" :: Nil, "in", "string3string"),
         (5, "string", "in", "field1" :: Nil),
         (5, "field1" :: Nil, "like", "string\\d"),
+        (4, "field1" :: Nil, "!<", "string3"),
+        (3, "field1" :: Nil, "!<=", "string3"),
+        (5, "field1" :: Nil, "!=", "string3"),
+        (3, "field1" :: Nil, "!>=", "string3"),
+        (4, "field1" :: Nil, "!>", "string3"),
+        (5, "field1" :: Nil, "!in", "string3string"),
+        (1, "string", "!in", "field1" :: Nil),
+        (1, "field1" :: Nil, "!like", "string\\d"),
         (2, "field2" :: Nil, "<", 3),
         (3, "field2" :: Nil, "<=", 3),
         (1, "field2" :: Nil, "=", 3),
