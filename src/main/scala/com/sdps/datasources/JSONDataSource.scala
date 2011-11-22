@@ -26,13 +26,13 @@ abstract class JSONDataSource(override val connectionString: String) extends Dat
 
     protected def writeData(data: JValue): Unit
 
-    def resolveProperty(value: JValue, properties: Seq[JValue]): JValue = properties.headOption.getOrElse { None } match {
+    def resolveProperty(value: JValue, properties: Seq[JValue] = Nil): JValue = properties.headOption.getOrElse { None } match {
         case JString(s: String) => resolveProperty(value \ s, properties.tail)
         case JInt(i: BigInt) => resolveProperty(value(i.intValue), properties.tail)
         case _ => value
     }
 
-    def isLessThan(itemValue: JValue, targetValue: JValue) = (itemValue, targetValue) match {
+    def isLessThan(left: JValue, right: JValue) = (left, right) match {
         case (JString(a), JString(b)) => a < b
         case (JDouble(a), JDouble(b)) => a < b
         case (JInt(a), JInt(b)) => a < b
@@ -40,7 +40,7 @@ abstract class JSONDataSource(override val connectionString: String) extends Dat
         case _ => false
     }
 
-    def isEqualTo(itemValue: JValue, targetValue: JValue) = (itemValue, targetValue) match {
+    def isEqualTo(left: JValue, right: JValue) = (left, right) match {
         case (JNothing, JNothing) => true
         case (JNull, JNull) => true
         case (JString(a), JString(b)) => a == b
@@ -52,7 +52,7 @@ abstract class JSONDataSource(override val connectionString: String) extends Dat
         case _ => false
     }
 
-    def isGreaterThan(itemValue: JValue, targetValue: JValue) = (itemValue, targetValue) match {
+    def isGreaterThan(left: JValue, right: JValue) = (left, right) match {
         case (JString(a), JString(b)) => a > b
         case (JDouble(a), JDouble(b)) => a > b
         case (JInt(a), JInt(b)) => a > b
@@ -60,35 +60,42 @@ abstract class JSONDataSource(override val connectionString: String) extends Dat
         case _ => false
     }
 
-    def isLessThanOrEqualTo(itemValue: JValue, targetValue: JValue) = isEqualTo(itemValue, targetValue) || isLessThan(itemValue, targetValue)
+    def isLessThanOrEqualTo(left: JValue, right: JValue) = isEqualTo(left, right) || isLessThan(left, right)
 
-    def isGreaterThanOrEqualTo(itemValue: JValue, targetValue: JValue) = isEqualTo(itemValue, targetValue) || isGreaterThan(itemValue, targetValue)
+    def isGreaterThanOrEqualTo(left: JValue, right: JValue) = isEqualTo(left, right) || isGreaterThan(left, right)
 
-    def isIn(itemValue: JValue, targetValue: JValue) = (itemValue, targetValue) match {
-        case (JString(a), JString(b)) => a contains b
-        case (JDouble(a), JDouble(b)) => a.toString contains b.toString
-        case (JInt(a), JInt(b)) => a.toString contains b.toString
-        case (JArray(a), b: JValue) => a contains b
-        case (a: JObject, b: JValue) => a.children contains b
+    def isIn(left: JValue, right: JValue) = (left, right) match {
+        case (JString(a), JString(b)) => b contains a
+        case (JDouble(a), JDouble(b)) => b.toString contains a.toString
+        case (JInt(a), JInt(b)) => b.toString contains a.toString
+        case (JBool(a), JBool(b)) => b.toString contains a.toString
+        case (a: JValue, JArray(b)) => b contains a
+        case (a: JValue, b: JValue) => b.children contains a
         case _ => false
     }
 
-    def isLike(itemValue: JValue, targetValue: JValue) = (itemValue, targetValue) match {
+    def isLike(left: JValue, right: JValue) = (left, right) match {
         case (JString(a), JString(b)) => a matches b
         case (JObject(a), JObject(b)) => (a intersect b) == b
         case (JArray(a), JArray(b)) => (a intersect b) == b
         case _ => false
     }
 
-    def filterItem(item: JValue, properties: Seq[JValue], comparator: String, value: JValue) = {
+    def filterItem(item: JValue, left: JValue, comparator: String, right: JValue) = {
+        val List(actualLeft, actualRight) = for(value <- left :: right :: Nil) yield value match {
+            case JArray(possibleProperties) =>
+                val resolvedValue = resolveProperty(item, possibleProperties)
+                if(resolvedValue == JNothing) value else resolvedValue
+            case _ => value
+        }
         val comparisonResult = comparator.stripPrefix("!") match {
-            case "<"    => isLessThan(resolveProperty(item, properties), value)
-            case "<="   => isLessThanOrEqualTo(resolveProperty(item, properties), value)
-            case "="   => isEqualTo(resolveProperty(item, properties), value)
-            case ">="   => isGreaterThanOrEqualTo(resolveProperty(item, properties), value)
-            case ">"    => isGreaterThan(resolveProperty(item, properties), value)
-            case "in"   => isIn(resolveProperty(item, properties), value)
-            case "like" => isLike(resolveProperty(item, properties), value)
+            case "<"    => isLessThan(actualLeft, actualRight)
+            case "<="   => isLessThanOrEqualTo(actualLeft, actualRight)
+            case "="   => isEqualTo(actualLeft, actualRight)
+            case ">="   => isGreaterThanOrEqualTo(actualLeft, actualRight)
+            case ">"    => isGreaterThan(actualLeft, actualRight)
+            case "in"   => isIn(actualLeft, actualRight)
+            case "like" => isLike(actualLeft, actualRight)
         }
         if(comparator startsWith "!") !comparisonResult else comparisonResult
     }
@@ -203,15 +210,15 @@ trait JSONObjectDataSource extends JSONDataSource {
                 orderBy),
             itemRange)
 
-    //TODO: This is shared with StupidJSONArrayDataSource. Find a way to factor it out into StupidJSONDataSource
-    protected def filterItems(items: Seq[JField], filters: Seq[(JArray, JString, JValue)]): Seq[JField] = try {
+    // TODO: This should support targetValue being either just a value or a property resolving construct
+    protected def filterItems(items: Seq[JField], filters: Seq[(JValue, JString, JValue)]): Seq[JField] = try {
         filters.head match {
-            case (JArray(properties), JString(comparator), targetValue) =>
-                filterItems(items filter { (item: JField) => filterItem(item.value, properties, comparator, targetValue) }, filters.tail)
+            case (left, JString(comparator), right) =>
+                filterItems(items filter { (item: JField) => filterItem(item.value, left, comparator, right) }, filters.tail)
         }
     } catch { case ex: NoSuchElementException => items }
 
-    def getItemsByFilter(itemFilters: Seq[(JArray, JString, JValue)] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0,-1)) =
+    def getItemsByFilter(itemFilters: Seq[(JValue, JString, JValue)] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0,-1)) =
         sliceItems(
             orderItems(
                 (for {
