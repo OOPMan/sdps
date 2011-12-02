@@ -8,6 +8,7 @@ import java.util.{NoSuchElementException, UUID}
 import java.io.{FileNotFoundException, File, FileWriter}
 import java.util.concurrent.locks.{ReentrantReadWriteLock}
 import java.util.concurrent.TimeUnit
+import java.util.regex.Pattern
 
 /**
  * Created by IntelliJ IDEA.
@@ -81,23 +82,52 @@ abstract class JSONDataSource(override val connectionString: String) extends Dat
         case _ => false
     }
 
-    def filterItem(item: JValue, left: JValue, comparator: String, right: JValue) = {
-        val List(actualLeft, actualRight) = for(value <- left :: right :: Nil) yield value match {
+    def startsWith(left: JValue, right: JValue) = (left, right) match {
+        case (JString(a), JString(b)) => a startsWith b
+        case (JDouble(a), JDouble(b)) => a.toString startsWith b.toString
+        case (JInt(a), JInt(b)) => a.toString startsWith b.toString
+        case (JArray(a), JArray(b)) => (a indexOfSlice b) == 0
+        case _ => false
+    }
+
+    def endsWith(left: JValue, right: JValue) = (left, right) match {
+        case (JString(a), JString(b)) => a endsWith b
+        case (JDouble(a), JDouble(b)) => a.toString endsWith b.toString
+        case (JInt(a), JInt(b)) => a.toString endsWith b.toString
+        case (JArray(a), JArray(b)) => (a.reverse indexOfSlice b.reverse) == 0
+        case _ => false
+    }
+
+    def filterItem(item: JValue, left: JValue, operator: String, right: JValue): Boolean = {
+        //TODO: This code could probably be cleaned up some
+        def tryResolveProperty(value: JValue, transformJNothings: Boolean = false) = value match {
             case JArray(possibleProperties) =>
-                val resolvedValue = resolveProperty(item, possibleProperties)
-                if(resolvedValue == JNothing) value else resolvedValue
+                val resolvedProperty = resolveProperty(item, possibleProperties)
+                if((resolvedProperty == JNothing) && transformJNothings) JNull else resolvedProperty
             case _ => value
         }
-        val comparisonResult = comparator.stripPrefix("!") match {
+        val actualOperator = operator.toLowerCase.stripPrefix("|").stripPrefix(":").stripSuffix("|").stripSuffix(":")
+        val actualLeft = if(operator startsWith ":") left else tryResolveProperty(left, operator startsWith "|")
+        val actualRight = if(operator startsWith ":") right else tryResolveProperty(right, operator endsWith "|")
+        if(!(List("and", "or") contains actualOperator.stripPrefix("!"))) {
+            if(!(operator startsWith ":") && !(operator startsWith "|") && actualLeft == JNothing) return false
+            if(!(operator endsWith ":") && !(operator endsWith "!") && actualRight == JNothing) return false
+        }
+        val comparisonResult = actualOperator.stripPrefix("!") match {
             case "<"    => isLessThan(actualLeft, actualRight)
             case "<="   => isLessThanOrEqualTo(actualLeft, actualRight)
             case "="   => isEqualTo(actualLeft, actualRight)
             case ">="   => isGreaterThanOrEqualTo(actualLeft, actualRight)
             case ">"    => isGreaterThan(actualLeft, actualRight)
             case "in"   => isIn(actualLeft, actualRight)
+            case "contains" => isIn(actualRight, actualLeft)
             case "like" => isLike(actualLeft, actualRight)
+            case "startswith" => startsWith(actualLeft, actualRight)
+            case "endswith" => endsWith(actualLeft, actualRight)
+            case "and" => (left, right) match { case (JArray(List(l1, JString(o1), r1)), JArray(List(l2, JString(o2), r2))) => filterItem(item, l1, o1, r1) & filterItem(item, l2, o2, r2) }
+            case "or" => (left, right) match { case (JArray(List(l1, JString(o1), r1)), JArray(List(l2, JString(o2), r2))) => filterItem(item, l1, o1, r1) | filterItem(item, l2, o2, r2) }
         }
-        if(comparator startsWith "!") !comparisonResult else comparisonResult
+        if(actualOperator startsWith "!") !comparisonResult else comparisonResult
     }
 
     def filterItemContent(item: JValue, contentFilters: Seq[JArray]) = {
@@ -213,8 +243,8 @@ trait JSONObjectDataSource extends JSONDataSource {
     // TODO: This should support targetValue being either just a value or a property resolving construct
     protected def filterItems(items: Seq[JField], filters: Seq[(JValue, JString, JValue)]): Seq[JField] = try {
         filters.head match {
-            case (left, JString(comparator), right) =>
-                filterItems(items filter { (item: JField) => filterItem(item.value, left, comparator, right) }, filters.tail)
+            case (left, JString(operator), right) =>
+                filterItems(items filter { (item: JField) => filterItem(item.value, left, operator, right) }, filters.tail)
         }
     } catch { case ex: NoSuchElementException => items }
 
@@ -262,7 +292,7 @@ class StupidJSONArrayDataSource(override val uri: String) extends StupidJSONData
     } yield (new JString(name), filterItemContent(value, contentFilters))
 
     protected def filterItems(items: Seq[JValue], filters: Seq[(JArray, JString, JValue)]): Seq[JField] = filters.headOption match {
-        case (JArray(properties), JString(comparator), targetValue) => filterItems(items filter { (item: JField) => filterItem(item.value, properties, comparator, targetValue) }, filters.tail)
+        case (JArray(properties), JString(operator), targetValue) => filterItems(items filter { (item: JField) => filterItem(item.value, properties, operator, targetValue) }, filters.tail)
         case _ => items
     }
 
