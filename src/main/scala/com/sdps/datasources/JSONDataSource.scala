@@ -1,5 +1,7 @@
 package com.sdps.datasources
 
+//TODO: Add copyright
+
 import scala.io.Source.fromFile
 import net.liftweb.json._
 import net.liftweb.json.Implicits._

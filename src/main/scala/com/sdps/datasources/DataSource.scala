@@ -1,5 +1,7 @@
 package com.sdps.datasources
 
+//TODO: Add copyright
+
 import net.liftweb.json._
 import net.liftweb.json.Implicits._
 
@@ -16,6 +18,8 @@ abstract class DataSource(val connectionString: String) {
     def getItemsById(itemIds: Seq[JValue] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0,-1)): Seq[(JValue, JValue)]
 
     /**
+     * TODO: Revise this documentation
+     *
      * Filters following a fairly simple format. Each Filter consists of a tuple containing:
      *
      * - A JArray element used to locate the property on the to be checked on the item being filtered
