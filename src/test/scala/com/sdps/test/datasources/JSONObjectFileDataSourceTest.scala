@@ -1,7 +1,8 @@
 package com.sdps.test.datasources
 
-import org.scalatest.FunSuite
-import org.scalatest.BeforeAndAfterAll
+//TODO: Add copyright
+
+import org.scalatest.{BeforeAndAfterAll, FunSuite}
 import java.io.File
 import net.liftweb.json._
 import net.liftweb.json.JsonDSL._
@@ -18,12 +19,21 @@ import com.sdps.datasources.JSONObjectFileDataSource
 //TODO: Split Test up by creating abstract test concrete sub-classes
 class JSONObjectFileDataSourceTest extends FunSuite with BeforeAndAfterAll {
 
+    implicit protected def convertAnyToJValue(input: Any): JValue = input match {
+        case s: String => s
+        case i: Int => i
+        case f: Float => f
+        case d: Double => d
+        case b: Boolean => b
+        case l: List[Any] => l map convertAnyToJValue  // <- Sometimes type-erasure can actually be useful!
+    }
+
+
     val tempFile = File.createTempFile("JSONObjectFileDataSourceTest", ".json")
     val dataSource = new JSONObjectFileDataSource(tempFile.getAbsolutePath)
     var idObjectList: Seq[(JValue, JValue)] = Nil
     var idObjectMap: Map[JValue, JValue] = Map()
     implicit val formats = DefaultFormats
-    Either
 
     val jsonObjects = List(
         ("field1" -> "string1") ~ ("field2" -> 1) ~ ("field3" -> 1.0) ~ ("field4" -> true)  ~ ("field5" -> List(1,2,3)) ~ ("field6" -> ("a" -> 1) ~ ("b" -> 2) ~  ("c" -> 3)),
@@ -34,10 +44,24 @@ class JSONObjectFileDataSourceTest extends FunSuite with BeforeAndAfterAll {
         ("name" -> "something different") ~ ("description" -> "xyz") ~ ("field3" -> 6.0)
     )
 
-    protected def generateFilters(filters: (Int, JValue, JString, JValue)*) = for((count, left, comparator, right) <- filters) yield
-        ("%s %-3s %s".format(compact(render(left)), comparator.s, compact(render(right))), count, (left, comparator, right) :: Nil)
+    protected def generateFilterString(left: JValue, operator: JString, right: JValue): String = operator.s.toLowerCase.stripPrefix(":").stripPrefix("!").stripSuffix(":") match {
+        case "and" => (left, right) match { case (JArray(List(l1, JString(o1), r1)), JArray(List(l2, JString(o2), r2))) => "%s %-3s %s".format(generateFilterString(l1, o1, r1), operator.s, generateFilterString(l2, o2, r2)) }
+        case "or" =>  (left, right) match { case (JArray(List(l1, JString(o1), r1)), JArray(List(l2, JString(o2), r2))) => "%s %-3s %s".format(generateFilterString(l1, o1, r1), operator.s, generateFilterString(l2, o2, r2)) }
+        case _ => "%s %-3s %s".format(compact(render(left)), operator.s, compact(render(right)))
+    }
+
+    protected def generateFilters(filters: (Int, JValue, JString, JValue)*) = for((count, left, operator, right) <- filters) yield
+        (generateFilterString(left, operator, right), count, (left, operator, right) :: Nil)
 
     val itemFilters = generateFilters(
+        (6, "string", "=", "string"),
+        (6, 1, "=", 1),
+        (6, 1.5, "=", 1.5),
+        (6, true, "=", true),
+        (6, 1 :: 2 :: 3 :: Nil, ":=:", 1 :: 2 :: 3 :: Nil),
+        (1, 1 :: "=" :: 1 :: Nil, "and", ("field1" :: Nil) :: "=" :: "string3" :: Nil),
+        (0, JArray(List(JInt(1), JString("="), JInt(0))), "and", JArray(List(JArray("field1" :: Nil), JString("="), JString("string3")))),
+        (1, JArray(List(JInt(1), JString("="), JInt(0))), "or", JArray(List(JArray("field1" :: Nil), JString("="), JString("string3")))),
         (2, "field1" :: Nil, "<", "string3"),
         (3, "field1" :: Nil, "<=", "string3"),
         (1, "field1" :: Nil, "=", "string3"),
@@ -46,26 +70,26 @@ class JSONObjectFileDataSourceTest extends FunSuite with BeforeAndAfterAll {
         (1, "field1" :: Nil, "in", "string3string"),
         (5, "string", "in", "field1" :: Nil),
         (5, "field1" :: Nil, "like", "string\\d"),
-        (4, "field1" :: Nil, "!<", "string3"),
-        (3, "field1" :: Nil, "!<=", "string3"),
-        (5, "field1" :: Nil, "!=", "string3"),
-        (3, "field1" :: Nil, "!>=", "string3"),
-        (4, "field1" :: Nil, "!>", "string3"),
-        (5, "field1" :: Nil, "!in", "string3string"),
-        (1, "string", "!in", "field1" :: Nil),
-        (1, "field1" :: Nil, "!like", "string\\d"),
+        (3, "field1" :: Nil, "!<", "string3"),
+        (2, "field1" :: Nil, "!<=", "string3"),
+        (4, "field1" :: Nil, "!=", "string3"),
+        (2, "field1" :: Nil, "!>=", "string3"),
+        (3, "field1" :: Nil, "!>", "string3"),
+        (4, "field1" :: Nil, "!in", "string3string"),
+        (0, "string", "!in", "field1" :: Nil),
+        (0, "field1" :: Nil, "!like", "string\\d"),
         (2, "field2" :: Nil, "<", 3),
         (3, "field2" :: Nil, "<=", 3),
         (1, "field2" :: Nil, "=", 3),
         (3, "field2" :: Nil, ">=", 3),
         (2, "field2" :: Nil, ">", 3),
         (1, "field2" :: Nil, "in", 3),
-        (4, "field2" :: Nil, "!<", 3),
-        (3, "field2" :: Nil, "!<=", 3),
-        (5, "field2" :: Nil, "!=", 3),
-        (3, "field2" :: Nil, "!>=", 3),
-        (4, "field2" :: Nil, "!>", 3),
-        (5, "field2" :: Nil, "!in", 3),
+        (3, "field2" :: Nil, "!<", 3),
+        (2, "field2" :: Nil, "!<=", 3),
+        (4, "field2" :: Nil, "!=", 3),
+        (2, "field2" :: Nil, "!>=", 3),
+        (3, "field2" :: Nil, "!>", 3),
+        (4, "field2" :: Nil, "!in", 3),
         (2, "field3" :: Nil, "<", 3.0),
         (3, "field3" :: Nil, "<=", 3.0),
         (1, "field3" :: Nil, "=", 3.0),
