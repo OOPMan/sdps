@@ -9,6 +9,7 @@ import scala.io.Source.fromFile
 import net.liftweb.json._
 import com.sdps.utils.Reflection.New
 import com.sdps.datasources.DataSource
+import tools.nsc.util.ScalaClassLoader.URLClassLoader
 
 class DataStoreFilter extends SDPSFilter with ScalateSupport {
     implicit val formats = DefaultFormats
@@ -19,9 +20,11 @@ class DataStoreFilter extends SDPSFilter with ScalateSupport {
     val configData = parse(fromFile("datastorefilter.json").mkString) match { case o: JObject => o }
     // Parse JSON Config data
     val dataSourceConfigs = for(f <- configData.obj) yield f.name -> f.value.extract[DataSourceConfig]
+    //Construct custom classloader using all additional classpaths
+    val dataSourceConfigsWithClasspaths = dataSourceConfigs filter { case (_, dataSourceConfig: DataSourceConfig) => dataSourceConfig.classpath.isDefined } 
+    val classpathURLs = dataSourceConfigsWithClasspaths map { case (_, dataSourceConfig: DataSourceConfig) => new URL(dataSourceConfig.classpath.get) }
+    implicit val classLoader = new URLClassLoader(classpathURLs, getClass.getClassLoader)
     // Parse Data Sources
-    //TODO: Construct custom classloader using all additional classpaths
-    implicit val classLoader = getClass.getClassLoader
     for((name, dataSourceConfig) <- dataSourceConfigs)
     {
         val constructorParameters = dataSourceConfig.connectionString +: dataSourceConfig.additionalArguments.getOrElse { Nil }
