@@ -60,18 +60,52 @@
 
 package com.sdps.datasources
 
+import java.lang.NumberFormatException
+import java.util.regex.{Pattern, Matcher}
 import net.liftweb.json._
 import net.liftweb.json.Implicits._
 
-/**
- * Created by IntelliJ IDEA.
- * User: adamj
- * Date: 9/12/11
- * Time: 9:29 AM
- * To change this template use File | Settings | File Templates.
- */
+object DataSource {
+    val namedGroupPattern = Pattern.compile("""\(\?<(?<GROUPNAME>[a-zA-z]\w*)>.*?\)""")
+    val parameterPattern = Pattern.compile("""\?|&(?<PARAMETER>[^=]+)=(?<VALUE>[^&\?]*)""")
+
+    def extractParameters(patternMatcher: Matcher, parameterName: String, startFrom: Int = 0)(valueGenerator: (Matcher,  String, String) => Any): List[(String, Any)] = {
+        patternMatcher.reset()
+        if(patternMatcher.find(startFrom)) {
+            try {
+                val parameterValue = patternMatcher.group(parameterName)
+                (parameterValue, valueGenerator(patternMatcher, parameterName, parameterValue)) :: extractParameters(patternMatcher, parameterName, patternMatcher.end)(valueGenerator)
+            } catch {
+                case e: Exception => extractParameters(patternMatcher, parameterName, patternMatcher.end)(valueGenerator)
+            }
+        } else Nil
+    }
+
+    def coerceString(s: String) = try { s.toFloat } catch {
+        case e: NumberFormatException => try { s.toInt } catch {
+            case e: NumberFormatException => try { s.toBoolean } catch {
+                case e: NumberFormatException => s
+            }
+        }
+    }
+}
 
 abstract class DataSource(val connectionString: String) {
+    import DataSource._
+
+    lazy val defaultParametersMap: Map[String, Any] = Map()
+    lazy val connectionStringPattern = """(?<PROTOCOL>protocol)://(?<HOSTNAME>hostname)(:(?<PORT>port))?(/(?<DATASOURCE>datasource))?"""
+
+    private val namedGroupPatternMatcher = namedGroupPattern.matcher(connectionStringPattern)
+    private val parameterPatternMatcher = parameterPattern.matcher(connectionString)
+    private val connectionStringPatternMatcher = Pattern.compile(connectionStringPattern).matcher(connectionString)
+
+    val parametersMap: Map[String, Any] =
+        if(connectionStringPatternMatcher.find && namedGroupPatternMatcher.find)
+            defaultParametersMap ++
+            extractParameters(parameterPatternMatcher, "PARAMETER"){ (m, _, _) => coerceString(m.group("VALUE")) }.toMap ++
+            extractParameters(namedGroupPatternMatcher, "GROUPNAME"){ (_, _, v) => coerceString(connectionStringPatternMatcher.group(v)) }.toMap
+        else defaultParametersMap ++ extractParameters(parameterPatternMatcher, "PARAMETER"){ (m, _, _) => coerceString(m.group("VALUE")) }.toMap
 
     def getItemsById(itemIds: Seq[JValue] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0,-1)): Seq[(JValue, JValue)]
 
