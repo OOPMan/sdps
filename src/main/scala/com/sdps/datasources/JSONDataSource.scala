@@ -214,7 +214,12 @@ abstract class JSONDataSource(override val connectionString: String) extends Dat
 
 }
 
-abstract class JSONFileDataSource(override val connectionString: String,  val maxWaitForLock: Int = 100) extends JSONDataSource(connectionString) {
+abstract class JSONFileDataSource(override val connectionString: String) extends JSONDataSource(connectionString) {
+
+    override lazy val defaultParametersMap: Map[String, Any] = Map("maxWaitForLock" -> 100)    
+    val maxWaitForLock = parametersMap.get("maxWaitForLock").get match { case i: Int => i }
+    val fileName = parametersMap.get("fileName").get match { case s: String => s } //TODO: URL Decode
+
     val sourceLock = new ReentrantReadWriteLock()
     val readLock = sourceLock.readLock()
     val writeLock = sourceLock.writeLock()
@@ -222,7 +227,7 @@ abstract class JSONFileDataSource(override val connectionString: String,  val ma
     override protected def readData = {
         if(!readLock.tryLock(maxWaitForLock, TimeUnit.MILLISECONDS)) throw new Exception("Unable to obtain Read Lock")
         try {
-            parse(fromFile(connectionString).mkString) }
+            parse(fromFile(fileName).mkString) }
         catch  {
             case e: FileNotFoundException => JNothing
             case e: ParseException => JNothing
@@ -233,7 +238,7 @@ abstract class JSONFileDataSource(override val connectionString: String,  val ma
 
     protected def writeData(data: JValue) {
         if(!writeLock.tryLock(maxWaitForLock, TimeUnit.MILLISECONDS)) throw new Exception("Unable to obtain Read Lock")
-        val writer = new FileWriter(new File(connectionString))
+        val writer = new FileWriter(new File(fileName))
         try {
             writer.write(compact(render(data)))
         }
@@ -337,7 +342,9 @@ trait JSONObjectDataSource extends JSONDataSource {
  * Works with a file that contains a single JSON object. Each key on the object maps to a single JSON object.
  * The objects stored on the object do not need to be uniformly structured
  */
-class JSONObjectFileDataSource(override val connectionString: String, override val maxWaitForLock: Int = 100) extends JSONFileDataSource(connectionString, maxWaitForLock) with JSONObjectDataSource
+class JSONObjectFileDataSource(override val connectionString: String) extends JSONFileDataSource(connectionString) with JSONObjectDataSource {
+    override lazy val connectionStringPattern = """file://(?<fileName>[^\?]+)"""
+}
 
 //class JSONObjectHTTPDataSource(override val connectionString: String, override val maxWaitForLock: Int = 100) extends JSONHTTPDataSource(connectionString) with JSONObjectDataSource
 
