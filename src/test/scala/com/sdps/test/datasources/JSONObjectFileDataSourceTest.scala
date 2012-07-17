@@ -88,7 +88,7 @@ class JSONObjectFileDataSourceTest extends FunSuite with BeforeAndAfterAll {
 
 
     val tempFile = File.createTempFile("JSONObjectFileDataSourceTest", ".json")
-    val dataSource = new JSONObjectFileDataSource(tempFile.getAbsolutePath)
+    val dataSource = new JSONObjectFileDataSource("file://%s".format(tempFile.getAbsolutePath))
     var idObjectList: Seq[(JValue, JValue)] = Nil
     var idObjectMap: Map[JValue, JValue] = Map()
     implicit val formats = DefaultFormats
