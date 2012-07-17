@@ -74,7 +74,7 @@ class ReflectionTest extends FunSuite with BeforeAndAfterAll {
     test("instantiate JSONObjectFileDataSource instance using New") {
         //TODO: We need a class loader here
         implicit val classLoader = getClass.getClassLoader
-        val dataSource: JSONObjectFileDataSource = New("com.sdps.datasources.JSONObjectFileDataSource")(tempFile.getAbsolutePath, 100)
+        val dataSource: JSONObjectFileDataSource = New("com.sdps.datasources.JSONObjectFileDataSource")("file://%s".format(tempFile.getAbsolutePath))
     }
 
     override def afterAll(configMap: Map[String, Any]) {
