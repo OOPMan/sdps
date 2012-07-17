@@ -71,7 +71,7 @@ object Reflection {
 
     def New[T <: AnyRef](className: String)(args: Any*)(implicit classLoader: ClassLoader): T = {
         val clazz: Class[T] = className
-        val argsWithType: List[WithType] = args +: Nil
+        val argsWithType: Seq[WithType] = ListAnyToListWithType(args)
         val argTypes = argsWithType map {
             _.clazz
         } toArray
@@ -97,7 +97,7 @@ object Reflection {
         val value: AnyRef
     }
 
-    case class ValWithType(anyVal: AnyVal, clazz: Class[_]) extends WithType {
+    case class ValWithType(anyVal: Any, clazz: Class[_]) extends WithType {
         lazy val value = toAnyRef(anyVal)
     }
 
@@ -105,16 +105,16 @@ object Reflection {
         val value = anyRef
     }
     
-    implicit def ListAnyToListWithType(l: List[Any]): List[WithType] = l map {
+    implicit def ListAnyToListWithType(l: Seq[Any]): Seq[WithType] = l map {
         case i: AnyRef => RefWithType(i, i.getClass)
-        case i: AnyVal => ValWithType(i, getType(i))
+        case i: Any => ValWithType(i, getType(i))
     }
 
     implicit def refWithType[T <: AnyRef](x: T) = RefWithType(x, x.getClass)
 
     implicit def valWithType[T <: AnyVal](x: T) = ValWithType(x, getType(x))
 
-    def getType(x: AnyVal): Class[_] = x match {
+    def getType(x: Any): Class[_] = x match {
         case _: Byte => java.lang.Byte.TYPE
         case _: Short => java.lang.Short.TYPE
         case _: Int => java.lang.Integer.TYPE
@@ -126,7 +126,7 @@ object Reflection {
         case _: Unit => java.lang.Void.TYPE
     }
 
-    def toAnyRef(x: AnyVal): AnyRef = x match {
+    def toAnyRef(x: Any): AnyRef = x match {
         case x: Byte => Byte.box(x)
         case x: Short => Short.box(x)
         case x: Int => Int.box(x)
