@@ -69,6 +69,7 @@ import com.sdps.utils.Reflection.New
 import com.sdps.datasources.DataSource
 import tools.nsc.util.ScalaClassLoader.URLClassLoader
 
+//TODO: Make this a servlet
 class DataStoreFilter extends SDPSFilter with ScalateSupport {
     implicit val formats = DefaultFormats
     //TODO: Complete case class
@@ -88,6 +89,12 @@ class DataStoreFilter extends SDPSFilter with ScalateSupport {
         val constructorParameters = dataSourceConfig.connectionString +: dataSourceConfig.additionalArguments.getOrElse { Nil }
         val ds: DataSource = New(dataSourceConfig.clazz)(constructorParameters: _*)
         //TODO: Generate relevant get/post method calls
+        get("/" + name + "/get-items-by-id") {
+            contentType = "text/json"
+            //TODO: Parse multiparams
+            //TODO: Execute query
+            //TODO: Return JSON Data
+        }
     }
 
     get("/") {
