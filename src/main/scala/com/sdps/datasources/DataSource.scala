@@ -107,7 +107,6 @@ abstract class DataSource(val connectionString: String) {
             extractParameters(namedGroupPatternMatcher, "GROUPNAME"){ (_, _, v) => coerceString(connectionStringPatternMatcher.group(v)) }.toMap
         else defaultParametersMap ++ extractParameters(parameterPatternMatcher, "PARAMETER"){ (m, _, _) => coerceString(m.group("VALUE")) }.toMap
 
-    def getItemsById(itemIds: Seq[JValue] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0,-1)): Seq[(JValue, JValue)]
 
     /**
      * TODO: Revise this documentation
@@ -137,6 +136,8 @@ abstract class DataSource(val connectionString: String) {
      *
      * TODO: Detail the manner in which the comparison operators interact with various values
      */
+    def getItemsById(itemIds: Seq[JValue] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0,-1)): Seq[(JValue, JValue)]
+
     def getItemsByFilter(itemFilters: Seq[(JValue, JString, JValue)] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0,-1)): Seq[(JValue, JValue)]
 
     def addItems(items: Seq[JValue]): Seq[JValue]
