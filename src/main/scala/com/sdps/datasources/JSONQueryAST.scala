@@ -16,8 +16,10 @@ object JSONQueryAST {
                 }
                 JSONQueryASTProperty(properties)
             case (JString("operation"), operandArray: JArray) =>
-                val operation = operandArray.arr.head match { case JString(s) => s }
-                val operands = operandArray.arr.tail map parseJValue
+                val (operation, operands) = input \ "#operation" match {
+                  case JString(s) => (s, operandArray.arr map parseJValue)
+                  case JNothing => (operandArray.arr.head match { case JString(s) => s }, operandArray.arr.tail map parseJValue)
+                }
                 JSONQueryASTOperation(operation, operands)
             case _ =>
                 JSONQueryASTValue(input)
