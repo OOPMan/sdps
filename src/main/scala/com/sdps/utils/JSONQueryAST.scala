@@ -1,5 +1,5 @@
 package com.sdps
-package datasources
+package utils
 
 import net.liftweb.json.{Implicits => _, _}
 
