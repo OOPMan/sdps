@@ -61,11 +61,9 @@
 package com.sdps.datasources
 
 import JSONQueryAST._
-import Implicits._
 import java.lang.NumberFormatException
 import java.util.regex.{Pattern, Matcher}
 import net.liftweb.json._
-import net.liftweb.json.Implicits._
 
 object DataSource {
     val namedGroupPattern = Pattern.compile("""\(\?<(?<GROUPNAME>[a-zA-z]\w*)>.*?\)""")
