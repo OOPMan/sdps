@@ -1,6 +1,7 @@
-package com.sdps.datasources
+package com.sdps
+package datasources
 
-import net.liftweb.json._
+import net.liftweb.json.{Implicits => _, _}
 
 object JSONQueryAST {
 
@@ -57,4 +58,15 @@ object JSONQueryAST {
     }
 }
 
-
+object Implicits extends Implicits
+trait Implicits {
+    implicit def int2jsonqueryastvalue(x: Int) = JSONQueryAST.JSONQueryASTInt(x)
+    implicit def long2jsonqueryastvalue(x: Long) = JSONQueryAST.JSONQueryASTInt(x)
+    implicit def bigint2jsonqueryastvalue(x: BigInt) = JSONQueryAST.JSONQueryASTInt(x)
+    implicit def double2jsonqueryastvalue(x: Double) = JSONQueryAST.JSONQueryASTDouble(x)
+    implicit def float2jsonqueryastvalue(x: Float) = JSONQueryAST.JSONQueryASTDouble(x)
+    implicit def bigdecimal2jsonqueryastvalue(x: BigDecimal) = JSONQueryAST.JSONQueryASTDouble(x.doubleValue)
+    implicit def boolean2jsonqueryastvalue(x: Boolean) = JSONQueryAST.JSONQueryASTBool(x)
+    implicit def string2jsonqueryastvalue(x: String) = JSONQueryAST.JSONQueryASTString(x)
+    implicit def jvalue2jsonqueryastvalue(x: JValue) = JSONQueryAST.parseJValue(x)
+}
