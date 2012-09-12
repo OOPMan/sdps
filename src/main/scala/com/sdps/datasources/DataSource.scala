@@ -60,6 +60,8 @@
 
 package com.sdps.datasources
 
+import JSONQueryAST._
+import Implicits._
 import java.lang.NumberFormatException
 import java.util.regex.{Pattern, Matcher}
 import net.liftweb.json._
@@ -136,14 +138,26 @@ abstract class DataSource(val connectionString: String) {
      *
      * TODO: Detail the manner in which the comparison operators interact with various values
      */
-    def getItemsById(itemIds: Seq[JValue] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0,-1)): Seq[(JValue, JValue)]
 
-    def getItemsByFilter(itemFilters: Seq[(JValue, JString, JValue)] = Nil, contentFilters: Seq[JArray] = Nil, orderBy: Seq[(JString, JArray)] = Nil, itemRange: (JInt, JInt) = (0,-1)): Seq[(JValue, JValue)]
+    def getItemsById(itemIds: Seq[JSONQueryASTValue] = Nil,
+                     contentFilters: Seq[JSONQueryASTValue] = Nil,
+                     orderBy: Seq[JSONQueryASTValue] = Nil,
+                     itemRange: (BigInt, BigInt) = (0,-1)): Seq[(JValue, JValue)]
+
+    def getItemsByFilter(itemFilters: Seq[JSONQueryASTValue] = Nil,
+                         contentFilters: Seq[JSONQueryASTValue] = Nil,
+                         orderBy: Seq[JSONQueryASTValue] = Nil,
+                         itemRange: (BigInt, BigInt) = (0,-1)): Seq[(JValue, JValue)]
 
     def addItems(items: Seq[JValue]): Seq[JValue]
 
-    def updateItems(items: Seq[(JValue, JValue)])
+    def updateItemsById(items: Seq[(JValue, JValue)])
+
+    def updateItemsByFilter(item: JObject,
+                            contentFilters: Seq[JSONQueryASTValue] = Nil)
 
     def deleteItemsById(ids: Seq[JValue] = Nil)
+
+    def deleteItemsByFilter(contentFilters: Seq[JSONQueryASTValue] = Nil)
 
 }
