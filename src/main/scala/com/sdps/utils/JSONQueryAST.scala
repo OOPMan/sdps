@@ -5,7 +5,7 @@ import net.liftweb.json.{Implicits => _, _}
 
 object JSONQueryAST {
 
-    abstract class JSONQueryASTValue
+    sealed abstract class JSONQueryASTValue
 
     case object JSONQueryASTNothing extends JSONQueryASTValue
 
