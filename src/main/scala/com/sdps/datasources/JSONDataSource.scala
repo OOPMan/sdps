@@ -59,6 +59,7 @@
  */
 
 package com.sdps.datasources
+package json
 
 import scala.io.Source.fromFile
 import net.liftweb.json._
@@ -69,17 +70,180 @@ import java.io.{FileNotFoundException, File, FileWriter}
 import java.util.concurrent.locks.{ReentrantReadWriteLock}
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
+import org.scalatra.util.RicherString
+import java.util
+import collection.immutable.WrappedString
+import com.sdps.utils.JSONQueryAST.JSONQueryASTValue
 
-/**
- * Created by IntelliJ IDEA.
- * User: adamj
- * Date: 9/13/11
- * Time: 12:06 PM
- * To change this template use File | Settings | File Templates.
- *
- * A Stupid JSON DataSource. Loads JSON data from a file. Very stupid :-)
- *
- */
+object JSONDataSource {
+    def resolveProperty(value: JValue, properties: Seq[Either[String, BigInt]] = Nil): JValue = properties.headOption.getOrElse { None } match {
+        case Left(s: String) => resolveProperty(value \ s, properties.tail)
+        case Right(i: BigInt) => resolveProperty(value(i.intValue), properties.tail)
+        case _ => value
+    }
+
+    sealed abstract class ASTValue {
+        def apply(context: JValue = JNothing): Any
+    }
+
+    case object ASTNothing extends ASTValue {
+        def apply(context: JValue) = None
+    }
+
+    case object ASTNull extends ASTValue {
+        def apply(context: JValue) = null
+    }
+
+    case class ASTString(s: String) extends ASTValue{
+        def apply(context: JValue) = s
+    }
+
+    case class ASTDouble(num: Double) extends ASTValue {
+        def apply(context: JValue) = num
+    }
+
+    case class ASTInt(num: BigInt) extends ASTValue {
+        def apply(context: JValue) = num
+    }
+
+    case class ASTBool(value: Boolean) extends ASTValue {
+        def apply(context: JValue) = value
+    }
+
+    case class ASTField(name: String, value: ASTValue) extends ASTValue {
+        def apply(context: JValue) = (name, value)
+    }
+
+    case class ASTObject(obj: List[ASTField]) extends ASTValue {
+        def apply(context: JValue) = obj
+    }
+
+    case class ASTArray(arr: List[ASTValue]) extends ASTValue {
+        def apply(context: JValue) = arr
+    }
+
+    case class ASTProperty(property: List[Either[String, BigInt]]) extends ASTValue {
+        def apply(context: JValue) = resolveProperty(context, property).values
+    }
+
+    sealed abstract class ASTOperation(operation: String, operands: List[ASTValue]) extends ASTValue
+
+    sealed abstract class ComparativeASTOperation(operation: String, operands: List[ASTValue]) extends ASTOperation(operation, operands) {
+        def performComparison[T](a: Ordered[T], b: T): Boolean
+
+        def compare(a: Any, b: Any): Boolean = (a, b) match {
+            case (a: String, b: String) => performComparison(a, b)
+            case (a: String, b: Int) => performComparison(a, b.toString)
+            case (a: String, b: Double) => performComparison(a, b.toString)
+            case (a: String, b: Boolean) => performComparison(a, b.toString)
+            case (a: Int, b: Int) => performComparison(a, b)
+            case (a: Int, b: String) => performComparison(a, b.toInt)
+            case (a: Int, b: Double) => performComparison(a, b.toInt)
+            case (a: Int, b: Boolean) => performComparison(a, if(b) 1 else 0)
+            case (a: Double, b: Double) => performComparison(a, b)
+            case (a: Double, b: String) => performComparison(a, b.toDouble)
+            case (a: Double, b: Int) => performComparison(a, b.toDouble)
+            case (a: Double, b: Boolean) => performComparison(a, if(b) 1.0 else 0.0)
+            case (a: Boolean, b: Boolean) => performComparison(a, b)
+            case (a: Boolean, b: String) => performComparison(a, b.toBoolean)
+            case (a: Boolean, b: Int) => performComparison(a, if(b == 1) true else false)
+            case (a: Boolean, b: Double) => performComparison(a, if(b == 1.0) true else false)
+            case _ => false
+        }
+
+        def apply(context: JValue): Boolean = operands.sliding(2).forall { case List(a, b) => compare(a(context), b(context)) }
+    }
+
+    case class LessThanASTOperation(operands: List[ASTValue]) extends ComparativeASTOperation("<", operands) {
+        def performComparison[T](a: Ordered[T], b: T) = a < b
+    }
+
+    case class LessOrEqualToASTOperation(operands: List[ASTValue]) extends ComparativeASTOperation("<=", operands) {
+        def performComparison[T](a: Ordered[T], b: T) = a <= b
+    }
+
+    trait EqualToComparison extends ComparativeASTOperation {
+        def performComparison[T](a: Ordered[T], b: T) = a == b
+
+        override def compare(a: Any, b: Any) = if(a == b) true else super.compare(a, b)
+    }
+
+    case class EqualToASTOperation(operands: List[ASTValue]) extends ComparativeASTOperation("==", operands) with EqualToComparison
+
+    case class GreaterThanOrEqualToASTOperation(operands: List[ASTValue]) extends ComparativeASTOperation(">=", operands) {
+        def performComparison[T](a: Ordered[T], b: T) = a < b
+    }
+
+    case class GreaterThanASTOperation(operands: List[ASTValue]) extends ComparativeASTOperation(">", operands) {
+        def performComparison[T](a: Ordered[T], b: T) = a < b
+    }
+
+    case class LogicalANDASTOperation(operands: List[ASTValue]) extends ComparativeASTOperation("and", operands) with EqualToComparison {
+        override def apply(context: JValue): Boolean = operands forall { value: ASTValue => compare(true, value(context)) }
+    }
+
+    case class LogicalORASTOperation(operands: List[ASTValue]) extends ComparativeASTOperation("or", operands) with EqualToComparison {
+        override def apply(context: JValue): Boolean = operands exists { value: ASTValue => compare(true, value(context)) }
+    }
+
+    abstract sealed class SetComparativeOperation(operation: String, operands: List[ASTValue]) extends ASTOperation(operation, operands) {
+        def performComparison[T](set: Seq[T], item: T): Boolean
+        def performSliceComparison[T](set: Seq[T], slice: Seq[T]): Boolean
+
+        def compare(set: Any, item: Any) = (set, item) match {
+            case (set: String, item: String) => performSliceComparison(set, item)
+            case (set: String, item: Int) => performSliceComparison(set, item.toString)
+            case (set: String, item: Double) => performSliceComparison(set, item.toString)
+            case (set: String, item: Boolean) => performSliceComparison(set, item.toString)
+            case (set: Int, item: Int) => performSliceComparison(set.toString, item.toString)
+            case (set: Int, item: String) => performSliceComparison(set.toString, item)
+            case (set: Int, item: Double) => performSliceComparison(set.toString, item.toString)
+            case (set: Int, item: Boolean) => performSliceComparison(set.toString, if(item) 1.toString else 0.toString)
+            case (set: Double, item: Double) => performSliceComparison(set.toString, item.toString)
+            case (set: Double, item: String) => performSliceComparison(set.toString, item)
+            case (set: Double, item: Int) => performSliceComparison(set.toString, item.toString)
+            case (set: Double, item: Boolean) => performSliceComparison(set.toString, if(item) 1.0d.toString else 0.0d.toString)
+            case (set: Boolean, item: Boolean) => performSliceComparison(set.toString, item.toString)
+            case (set: Boolean, item: String) => performSliceComparison(set.toString, item)
+            case (set: Boolean, item: Int) => performSliceComparison(set.toString, if(item == 1) true.toString else false.toString)
+            case (set: Boolean, item: Double) => performSliceComparison(set.toString, if(item == 1.0) true.toString else false.toString)
+            case (set @ List(_*), item @ List(_*)) => performSliceComparison(set, item)
+            case (set @ List(_*), item) => performComparison(set, item)
+            case _ => false
+        }
+    }
+
+    case class InOperation(operands: List[ASTValue]) extends SetComparativeOperation("in", operands) {
+        def performComparison[T](set: Seq[T], item: T) = set contains item
+
+        def performSliceComparison[T](set: Seq[T], slice: Seq[T]) = set containsSlice slice
+
+        def apply(context: JValue) = {
+            val item = operands.head(context)
+            operands.tail forall { set: ASTValue => compare(set(context), item) }
+        }
+    }
+
+    case class ContainsOperation(override val operands: List[ASTValue]) extends InOperation(operands.reverse)
+
+    case class StartsWithOperation(override val operands: List[ASTValue]) extends ContainsOperation(operands) {
+        override def performComparison[T](set: Seq[T], item: T) = set.head == item
+
+        override def performSliceComparison[T](set: Seq[T], slice: Seq[T]) = set startsWith slice
+    }
+
+    case class EndsWithOperation(override val operands: List[ASTValue]) extends StartsWithOperation(operands) {
+        override def performSliceComparison[T](set: Seq[T], slice: Seq[T]) = set endsWith slice
+    }
+
+    sealed abstract class TransformativeASTOperation(operation: String, operands: List[ASTValue]) extends ASTOperation(operation, operands) {
+        def apply(context: JValue): Any
+    }
+
+    sealed abstract class ReductiveASTOperation(operation: String, operands: List[ASTValue]) extends ASTOperation(operation, operands) {
+        def apply(context: JValue): List[Any]
+    }
+}
 
 abstract class JSONDataSource(override val connectionString: String) extends DataSource(connectionString) {
 
@@ -334,6 +498,44 @@ trait JSONObjectDataSource extends JSONDataSource {
     }
 
     def deleteItemsById(ids: Seq[JValue]) = writeData(new JObject(readData.obj filter { case JField(name, value: JObject) => !(ids contains name) }))
+
+    /**
+     * TODO: Revise this documentation
+     *
+     * Filters following a fairly simple format. Each Filter consists of a tuple containing:
+     *
+     * - A JArray element used to locate the property on the to be checked on the item being filtered
+     * - A JString element used to determine the comparison operation to be used
+     * - A JValue element used to compare the property value against
+     *
+     *
+     * The JArray element follows a fairly simply format in that the only valid values to be contained within
+     * the JArray are JStrings and JInt values.
+     *
+     * A JString value is used to resolve a property name on the item being filtered and is applicable
+     * when the base item is a JObject.
+     *
+     * A JInt value is used to resolve a value by numeric index and is applicable when the base item
+     * is a JArray
+     *
+     *
+     * The JString element may be one of: > >= = <= < in or like with the the ! (not) suffix being
+     * valid for each of these.
+     *
+     *
+     * The JValue element may be any valid JValue sub-class for which a comparison option is valid
+     *
+     * TODO: Detail the manner in which the comparison operators interact with various values
+     */
+    def getItemsById(itemIds: Seq[JSONQueryASTValue], contentFilters: Seq[JSONQueryASTValue], orderBy: Seq[JSONQueryASTValue], itemRange: (BigInt, BigInt)) = null
+
+    def getItemsByFilter(itemFilters: Seq[JSONQueryASTValue], contentFilters: Seq[JSONQueryASTValue], orderBy: Seq[JSONQueryASTValue], itemRange: (BigInt, BigInt)) = null
+
+    def updateItemsById(items: Seq[(_root_.net.liftweb.json.JValue, _root_.net.liftweb.json.JValue)]) {}
+
+    def updateItemsByFilter(item: _root_.net.liftweb.json.JObject, contentFilters: Seq[JSONQueryASTValue]) {}
+
+    def deleteItemsByFilter(contentFilters: Seq[JSONQueryASTValue]) {}
 }
 
 /**
