@@ -1,10 +1,12 @@
+.DS_Store
+target/
+/.lib/
 *~
 lib_managed/
 project/boot/
 project/build/target/
 project/plugins/project/build.properties
 src_managed/
-target/
 .idea/
 .idea_modules/
 *.eml
